@@ -1,0 +1,4383 @@
+commit b43efdd03123befaf7470b7b15aa898275bbd790
+Author: Alexander Larsson <alexl@redhat.com>
+Date:   2009-12-14
+
+    Update NEWS for release
+
+M	NEWS
+
+commit e286c9b3f032c84298b715eaf821bc8a7df59bc3
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-12-08
+
+    [gdu] Be more careful with automounting - use a whitelist
+
+    The current behavior is that we try to automount all filesystems. This
+    has unintended consequences for big iron boxes connected to a SAN when
+    the user is logging in as root (thus having all polkit authorizations
+    at hand) - literally hundreds or thousands of devices may get mounted.
+
+    As such, only automount filesystems from the current whitelist
+
+     - anything connected via USB or Firewire or SDIO buses
+     - optical discs
+
+    Signed-off-by: David Zeuthen <davidz@redhat.com>
+
+M	monitor/gdu/ggduvolume.c
+
+commit f909a095df0189569c28a786d01a0abda9f7e76a
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-12-08
+
+    [gdu] Prefer using dev_t to device file when comparing devices
+
+    This works around new behavior in mount(8) where it decides to put
+    /dev/mapper/<blah> in /etc/mtab instead of the /dev/dm-0 device that
+    the user actually requested.
+
+    Of course /dev/mapper/<blah> currently does not exist in the udev
+    database because of device-mapper brokenness so without this fix
+    things can never work if using a sufficiently new mount(8) command.
+
+    Signed-off-by: David Zeuthen <davidz@redhat.com>
+
+M	monitor/gdu/ggdudrive.c
+M	monitor/gdu/ggdudrive.h
+M	monitor/gdu/ggduvolume.c
+M	monitor/gdu/ggduvolume.h
+M	monitor/gdu/ggduvolumemonitor.c
+M	monitor/gdu/ggduvolumemonitor.h
+
+commit 2714a72902d35cd55668484eb5bfdfc23eb16f09
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-12-08
+
+    [gdu] Stop assuming that drives have no enclosing presentable
+
+    This makes the gdu volume monitor works with recent gnome-disk-utility
+    versions with things like GduHub presentables that represents HBAs and
+    Expanders. This will not affect previous gnome-disk-utility versions.
+
+    Signed-off-by: David Zeuthen <davidz@redhat.com>
+
+M	monitor/gdu/ggduvolume.c
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit eff994cc20d177113989aa3a2160a9a30b70f4bc
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-12-01
+
+    Handle error case in cache lookup correctly
+
+    If we're in error, we should return NULL, not an uninitialized info.
+    (cherry picked from commit a17a5d9e3a13c0bf516a0955e79a1620efa00c6d)
+
+M	daemon/gvfsftpdircache.c
+
+commit b98c2a479110b37802bcd9c9ecd7f0298bf33c56
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-12-01
+
+    Ensure timer_cancel is initialized
+
+    Otherwise it may be used uninitialized if progress_callback is NULL
+    (cherry picked from commit 2f86e533d18c67c5e820d08d53769d82884bff71)
+
+M	daemon/gvfsbackendftp.c
+
+commit 58df41d09a14104304b3df3580a61408d262fa02
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-12-01
+
+    Correctly dup strings in meta_tree_lookup_stringv
+
+    Also, make sure to free that in all callers.
+    (cherry picked from commit b2984619f1fa9ed1f73bafb3d749f322e17bb605)
+
+M	client/gdaemonvfs.c
+M	metadata/metatree.c
+
+commit bad65624c661d35da97093b873aea7ff376ded82
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-11-30
+
+    [SMB] Fix free space calculation for older samba servers
+
+    Samba servers older than 3.0.28 report zero values.
+
+M	daemon/gvfsbackendsmb.c
+
+commit 95e01e5172e766daa573a927c222b1c2d52c9ebf
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-11-30
+
+    post release version bump
+
+M	configure.ac
+
+commit cc978adb866b1bc56fa46dc3f485b1d0a72d74c7
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-11-30
+
+    Add NEWS
+
+M	NEWS
+
+commit 6dbaf17f99e36816cf229640244488034d03cea6
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-11-26
+
+    fuse: Request access::* as needed by file_info_get_stat_mode
+
+    Fixes bug #594791.
+    (cherry picked from commit f2f50e72569406cfd974dcef6f293ebff3378f61)
+
+M	client/gvfsfusedaemon.c
+
+commit 2a6663bf3f98b797b3a21dcd21833b91d3d97793
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-11-19
+
+    fuse: Fix setting timestamps
+
+    We need to set time in seconds and microseconds separately.
+    Moreover, backends may not fully support setting all attributes
+    so don't report failure when at least one succeeded.
+
+    At the moment, only SMB supports setting
+    G_FILE_ATTRIBUTE_TIME_MODIFIED.
+    (cherry picked from commit 59bea4126cf23c575323c59a4cb1123f7cb44e2b)
+
+M	client/gvfsfusedaemon.c
+
+commit a455d9e65d6725067317ee0176275c2e18d9a16b
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-11-19
+
+    [SMB] Fix compilation with older libsmbclient versions
+
+    Actually check for smbc_getFunctionStatVFS() presence.
+    Unfortunately smbclient pkg-config files still report version 0.
+
+    Fixes bug 602323.
+    (cherry picked from commit e7c997882e656751f021c65c2ce71739cf12f585)
+
+M	configure.ac
+M	daemon/gvfsbackendsmb.c
+
+commit 478ea6870ef5c576a8b13636c8641def046ba55d
+Author: Christian Kellner <gicmo@gnome.org>
+Date:	2009-11-18
+
+    Fsync the directory when rotating the metadata
+
+    This is needed so we never end up having a stable file with the
+    rotated bit set. Should fix bug #600057.
+    (cherry picked from commit 6592ecb3b95146b84072cf276eb98fba324b11ad)
+
+M	metadata/metabuilder.c
+
+commit 6e397fbf15e074ba598de33240596f6b31211dc5
+Author: Christian Kellner <gicmo@gnome.org>
+Date:	2009-11-18
+
+    Reread metadata only when the inodes are different
+
+    This will protect against bugs where the stable file has the rotated
+    bug set (which should never happen but see bug #600057)
+    (cherry picked from commit 5e0cd74ada6749ab7e489db2fa22bd8cb5d2881c)
+
+M	metadata/metatree.c
+
+commit 64f936f3ad40ca52e115099b62b3b4912323a800
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-11-18
+
+    [SMB] Fix free space calculation for Windows hosts
+
+    Needs more testing, it's just a workaround.
+    libsmbclient docs missing!
+    (cherry picked from commit 922d398b8896684e166808ae047764633836913f)
+
+M	daemon/gvfsbackendsmb.c
+
+commit 94140ae2c7d31b12bb64d1f809d2728b9c076b8b
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-11-10
+
+    [SMB] Support querying filesystem size and free space
+
+    Requires libsmbclient >= 3.2.0
+
+    Fixes rfe bug 565337
+    (cherry picked from commit 72d716e37bd8a26361608a69beb60089981dee19)
+
+M	daemon/gvfsbackendsmb.c
+
+commit 70299f7d5ddfe416248e8899fe4db4127af88b07
+Author: Christian Kellner <gicmo@gnome.org>
+Date:	2009-10-16
+
+    Bug 598660 - Must honor the remove_source switch
+    (cherry picked from commit 854db908aaad2690d56ae2dfd061207c5a6215ee)
+
+M	daemon/gvfsbackendobexftp.c
+
+commit 7e7149c52d954be4c341857d576aea6e462fa319
+Author: Brian Cameron <Brian.Cameron@sun.com>
+Date:	2009-10-09
+
+    Avoid crash when printf function is called with a NULL string.  Fixes
+    bug #580825.
+    (cherry picked from commit cd99d7d11fef5488cdd1e8b96829459dd2afad15)
+
+M	daemon/gvfsbackendsmbbrowse.c
+
+commit 1b35fa24c502b3b19a2634bf25c5d7437cf21aed
+Author: Alban Crequy <alban.crequy@collabora.co.uk>
+Date:	2009-10-09
+
+    Don't subscribe to unnecessary HAL D-Bus events
+
+    Fixes bug 597827
+    (cherry picked from commit 8a540ab974ea032727ec0447ae678f9417d48103)
+
+M	monitor/hal/hal-device.c
+M	monitor/hal/hal-pool.c
+
+commit cd84325d8619f7d1bb7a27bea915948c2a4d764e
+Author: Michael Chudobiak <mjc@avtechpulse.com>
+Date:	2009-10-01
+
+    [gphoto] Add fast mime-type information
+
+    See https://bugzilla.gnome.org/show_bug.cgi?id=594928
+    (cherry picked from commit 3df23252bc81d06ea8dbc8815140ac1f10012d45)
+
+M	daemon/gvfsbackendgphoto2.c
+
+commit 5b99218195ca7dc78aeabc77d8f5a32fd83bd693
+Author: Christian Kellner <christian.kellner@topalis.com>
+Date:	2009-09-29
+
+    [HTTP] Bug 595981 - HTTP backend never seems to return any icon
+
+    Set the icon based on the mime-type. Also replace code to set the
+    display name with a call to gvfs_file_info_populate_names_as_local.
+    (cherry picked from commit 9b5ce208fca77fa9d02cd73195d2d193c5e6b5ed)
+
+M	daemon/gvfsbackendhttp.c
+
+commit 95711768d3e079952d4e127e3291caf8e9ef62f4
+Author: Matt McCutchen <matt@mattmccutchen.net>
+Date:	2009-11-19
+
+    Correctly report -ENOSYS for readline in FUSE
+
+    The readlink vfunc is not implemented in the FUSE module so we should
+    not report success but an error (-ENOSYS). We also don't implement the
+    vfunc for now since that might lead to a security issue (see the
+    added comment). This fixes bug #601361.
+
+    Signed-off-by: Christian Kellner <gicmo@gnome.org>
+
+M	client/gvfsfusedaemon.c
+
+commit ea829d236ca2702ff52048dec86dc96b403e66d9
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-11-19
+
+    Don't store write() return val in unsigned variable
+
+    The conversion to unsigned means we failed to recognize errors,
+    since if (ret < 0) was never hit. This is the suspected cause
+    for data loss in bug 598561.
+    (cherry picked from commit f45b677201abb6b8471fa5bc935afda420c28c39)
+
+M	metadata/metabuilder.c
+
+commit 81e1695043422607da256f60c8bd306e6d14d33c
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-11-13
+
+    Fixed parsing of CMU/VMS-IP FTP style listing (upstream)
+
+    upstream references:
+    http://bugzilla.mozilla.org/show_bug.cgi?id=515583
+    http://hg.mozilla.org/mozilla-central/rev/98330c8132a9
+    http://hg.mozilla.org/mozilla-central/rev/cade5b705114
+
+M	daemon/ParseFTPList.c
+
+commit 48cf9c174f347f92c3fab7ff50b38effda0eb78a
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-10-30
+
+    Gently handle NULL GduDevice objects
+
+    This patch adds bunch of tests for NULL GduDevice objects. According
+    to
+    gdu docs, there's a possibility to have GduPresentable and no
+    associated
+    GduDevice. It's not common but true for several special cases -
+    like GduLinuxMdDrive.
+
+    Signed-off-by: David Zeuthen <davidz@redhat.com>
+
+M	monitor/gdu/ggduvolume.c
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit cd2afbd07bbcf4e7caee1dd0ca1c65d74974884d
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-10-30
+
+    Remove dead code
+
+    Signed-off-by: David Zeuthen <davidz@redhat.com>
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit cbc8cad794942199856c23674b5815de1f2e7b0f
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-10-19
+
+    Bump version
+
+M	configure.ac
+
+commit 68b83cc6b4c7aa6fa4a29c484dbf7af3f843eaa4
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-10-19
+
+    Updates
+
+M	NEWS
+
+commit 4198b77bef1582aeaaa365afc69426b16b53363b
+Author: FujianWZH <fujianwzh@gmail.com>
+Date:	2009-10-19
+
+    Updated Simplified Chinese translation.
+
+M	po/zh_CN.po
+
+commit 5ab24ddaedacaaf328d1cad48a73fe667aa50af9
+Author: Martin Pitt <martin.pitt@ubuntu.com>
+Date:	2009-10-12
+
+    Bug 597585 – 2.28 lists mtp devices as being cameras with gudev
+    backend
+
+    Set correct MIME type for MTP music players based on whether it's
+    a camera or a
+    music player.
+
+    Signed-off-by: David Zeuthen <davidz@redhat.com>
+
+M	daemon/gvfsbackendgphoto2.c
+
+commit d840dbb0fecae485ea94f467d40a5dc9c1c20446
+Author: Bastien Nocera <hadess@hadess.net>
+Date:	2009-10-14
+
+    Fix crasher in obexftp backend
+
+    Spotted by Matthias Clasen
+
+    See https://bugzilla.redhat.com/show_bug.cgi?id=528181
+
+M	daemon/gvfsbackendobexftp.c
+
+commit dcfd2ae59b1ea494ea9d54038af795782c9a3e3a
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-10-13
+
+    Silently drop eject error messages when detaching drive
+
+    If there's no media in drive and yet it's marked as detachable,
+    calling eject would cause "no media in drive" error.
+    This is the case with my USB SD card reader.
+
+M	monitor/gdu/ggdudrive.c
+
+commit 9fcb94f8d86f91f7f1d91d48399bf0c994e6c544
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-10-13
+
+    Disallow ejecting empty drives
+
+    Similar to previous commit, hide the Eject menu item when drive has
+    no media.
+
+M	monitor/gdu/ggdudrive.c
+
+commit 059c58f93665d72be8ad1ffa0d68f3866b50aaa0
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-10-13
+
+    Disallow mounting empty drives
+
+    This concerns only removable media drives without any detected
+    volumes.
+    The end result is no Mount item in Nautilus popup menu and no
+    action taken
+    on double-click over the drive icon.
+
+    The exception is floppy drives, where we always allow mount without
+    need
+    of detecting media manually first.
+
+M	daemon/gvfsbackendcomputer.c
+
+commit 31f6a01ae1f4cd23c21e925c22a28ddf03c8e622
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-10-12
+
+    Use FAILED_HANDLED error code when user aborts
+
+    This allows Nautilus to check for FAILED_HANDLED and not displaying an
+    error dialog to the user. Users don't like error dialogs thatdo
+    nothing
+    but tell them what they just did.
+
+    Partial fix for https://bugzilla.gnome.org/show_bug.cgi?id=594495
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsbackendsftp.c
+M	daemon/gvfsbackendsmb.c
+M	daemon/gvfsbackendsmbbrowse.c
+
+commit 14d1fefceda16ec3df314cd8c55b18c9f4426615
+Author: Kjartan Maraas <kmaraas@gnome.org>
+Date:	2009-10-11
+
+    Updated Norwegian bokmål translation
+
+M	po/nb.po
+
+commit ade7e023cc9dc8430086a2762c7b1236c8350b17
+Author: Gil Forcada <gforcada@gnome.org>
+Date:	2009-10-10
+
+    Updated Catalan translation
+
+M	po/ca.po
+
+commit 780bae9c28df7e6d5f2463d9621f7db48524ee24
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-10-08
+
+    Fix return value of gdu_drive_can_poll_for_media()
+
+    If a drive doesn't use removable media, we shouldn't advertise that it
+    can be polled.
+
+M	monitor/gdu/ggdudrive.c
+
+commit 92bd6869f22bbe582f51f4ffca4d71f65ef9d6a6
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-10-08
+
+    Bug 597864 –  Need to separate "Safely Remove Drive" from "Eject"
+
+    Some systems use internal USB devices. Automatically detaching such
+    drives when calling gdu_drive_eject() (triggered by e.g. the eject
+    button in the Nautilus sidebar) as we do right now leads to loss of
+    the drive until reboot (since the device is internal). The only viable
+    option right now is to separate "Safely Remove Drive" and "Eject".
+
+    If we gain infrastructure to let us know with 100% accuracy that a
+    given receptacle is external we can go back to the previous behavior.
+
+    See http://bugs.freedesktop.org/show_bug.cgi?id=24343 for details.
+
+M	monitor/gdu/ggdudrive.c
+
+commit 5ae16ae1feb4e6076fce5794b04481c780f406f4
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-10-08
+
+    Fix creating mount_spec from string
+
+    Don't consume the ending character.
+
+M	common/gmountspec.c
+
+commit 0b09cc8e57bc5fa701dd685d648fd338b92b2c48
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-10-08
+
+    Don't always overwrite on trash restore
+
+    We want to get overwrite dialogs when restoring from trash.
+
+    https://bugzilla.gnome.org/show_bug.cgi?id=596618
+
+M	daemon/gvfsbackendtrash.c
+M	daemon/trashlib/trashitem.c
+M	daemon/trashlib/trashitem.h
+
+commit 5b6a4aeed0fc545a7698882e2b45c3f4051b1432
+Author: Leonid Kanter <leon@asplinux.ru>
+Date:	2009-10-05
+
+    Updated Russian translation
+
+M	po/ru.po
+
+commit c03150bb09cb75a0ca6379f286cea35476c3a869
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-10-01
+
+    Bug 597041 – Manual umount triggers mount request
+
+    We also need to consider logical partitions when determining if a
+    drive should be ignored.
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit bb30a92179e7d9a624fd87df90a3de20e1ab3cca
+Author: Christian Kellner <gicmo@gnome.org>
+Date:	2009-10-01
+
+    Bug 586724 - Require gdu version >= 2.28.0
+
+M	configure.ac
+
+commit da8d0d3f146983d7fb099a90348815d3a18405c1
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-30
+
+    Claim to support file: uris too
+
+    We forgot to say the file: method is supported (#596867)
+
+M	client/gdaemonvfs.c
+
+commit 3f0927115ca7c22adac9f331788c81353e783702
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-28
+
+    Don't show ssh dns-sd items in dns-sd:, only sftp ones
+
+    ssh means a login shell and sftp means a file share, and
+    each server may have both. Don't know how this snuck in again.
+
+M	daemon/gvfsbackenddnssd.c
+
+commit 7d4ec4b1457c2c34c03037ce4d8b86340103eacc
+Author: Matej Urbančič <mateju@svn.gnome.org>
+Date:	2009-09-24
+
+    Updated Slovenian translation
+
+M	po/sl.po
+
+commit 0285e9ede48ff83aead882401e36e9d7ae25746f
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-23
+
+    FreeBSD support for gphoto2 backend
+
+    Here is a patch from Aurélien Jarno to enable the gphoto2 backend
+    on FreeBSD
+    and GNU/kFreeBSD.
+
+M	configure.ac
+M	monitor/gphoto2/ggphoto2volumemonitor.c
+
+commit 24041285e7392f5c83c8b98a017181983233d411
+Author: Petr Kovar <pknbe@volny.cz>
+Date:	2009-09-22
+
+    Updated Czech translation
+
+M	po/cs.po
+
+commit 903ebd0068bcaa02a4a1fe08a073c2419a3ab668
+Author: Luca Ferretti <elle.uca@libero.it>
+Date:	2009-09-21
+
+    Updated Italian translation
+
+M	po/it.po
+
+commit 54bda49c318a27d66721ce2248579bc3e65e39b0
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-21
+
+    Post release version bump
+
+M	configure.ac
+
+commit 63ed8dfdb84f96b2de3a4be6c1dd5dc2c5501f2d
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-21
+
+    Update for 1.4.0
+
+M	NEWS
+M	configure.ac
+
+commit 8905787abcfbe31bdf193a8f5722232d59ef17fd
+Author: Nikos Charonitakis <nikosx@gmail.com>
+Date:	2009-09-21
+
+    Updated Greek translation
+
+M	po/el.po
+
+commit 1ddfc9549d8a0b09c0752d6511603b6b0128ab07
+Author: Alexander Shopov <ash@contact.bg>
+Date:	2009-09-21
+
+    Updated Bulgarian translation
+
+M	po/bg.po
+
+commit 243d379e42d00738a4c8f25ed26a07194e915fc3
+Author: Shankar Prasad <svenkate@redhat.com>
+Date:	2009-09-21
+
+    Updated Kannada(kn) translation
+
+M	po/kn.po
+
+commit f9304c44e0dd344f5dc6b9f293316c623d7fbee6
+Author: Petr Kovar <pknbe@volny.cz>
+Date:	2009-09-21
+
+    Updated Czech translation
+
+M	po/cs.po
+
+commit 768e96d41a7caeb18be2bf32cf643143fff9af27
+Author: Amitakhya Phukan <aphukan@fedoraproject.org>
+Date:	2009-09-20
+
+    Updating Assamese translations
+
+M	po/as.po
+
+commit 88ca19da76f278092becdc7b1f07e3ccd95ca751
+Author: Christian Kirbach <Christian.Kirbach@googlemail.com>
+Date:	2009-09-18
+
+    Updated German translation
+
+M	po/de.po
+
+commit 5bcc38937e79c86b69c14acf715203f27088817e
+Author: Rajesh Ranjan <rranjan@rranjan.csb>
+Date:	2009-09-18
+
+    maithili update
+
+M	po/LINGUAS
+A	po/mai.po
+
+commit f47993c4c7a5a4fe782f25f8fda300aed762442c
+Author: krishnababu k <kkrothap@redhat.ocm>
+Date:	2009-09-17
+
+    Updated Telugu Translations
+
+M	po/te.po
+
+commit 0a11cb2552a0f382884bb28d78430e866bcf560a
+Author: Maxim V. Dziumanenko <dziumanenko@gmail.com>
+Date:	2009-09-17
+
+    Added Ukrainian translation
+
+M	po/uk.po
+
+commit b358ca19acb2063775bb6688d654cc684cda6576
+Author: Carlos Garcia Campos <carlosgc@gnome.org>
+Date:	2009-09-16
+
+    Make sure metadata is always returned by query_writable_namespaces()
+
+M	client/gdaemonfile.c
+
+commit a3da826b69909ca1d9b670f4412c2ba2305a9440
+Author: Mattias Põldaru <mahfiaz gmail com>
+Date:	2009-09-17
+
+    Updating Estonian translation
+
+M	po/et.po
+
+commit f59902cec241e03369563aaefa33490f11d241d3
+Author: Adi Roiban <adi@roiban.ro>
+Date:	2009-09-16
+
+    Updated Romanian translation
+
+M	po/ro.po
+
+commit c2a25f5a1a596b4dd5947ad5eca0e4c78352771a
+Author: Adi Roiban <adi@roiban.ro>
+Date:	2009-09-16
+
+    Updated Romanian translation
+
+M	po/ro.po
+
+commit 03f9294707344c485e84946080a0fee2352e3f99
+Author: Žygimantas Beručka <zygis@gnome.org>
+Date:	2009-09-16
+
+    Updated Lithuanian translation
+
+M	po/lt.po
+
+commit ddb8238f5ff5ed8b1c35eb99c4809ab6f62d9002
+Author: Antón Méixome <meixome@mancomun.org>
+Date:	2009-09-16
+
+    Updated Galician Translation
+
+M	po/gl.po
+
+commit 7595864bc388819c956a6bc8c0b851f3f6575406
+Author: Rajesh Ranjan <rranjan@rranjan.csb>
+Date:	2009-09-15
+
+    hindi update by Rajesh Ranjan
+
+M	po/hi.po
+
+commit fef963a9604a6ba2c111c9f713a5016f7301d148
+Author: Manoj Kumar Giri <mgiri@mgiri.csb>
+Date:	2009-09-14
+
+    Upadted Oriya Translation
+
+M	po/or.po
+
+commit a586e52374e2e380f517953a804fe477786ad3da
+Author: Ask H. Larsen <asklarsen@gmail.com>
+Date:	2009-09-13
+
+    Updated Danish translation
+
+M	po/da.po
+
+commit 4f4db2db80a21524e95b71ed995934144a912264
+Author: Ask H. Larsen <asklarsen@gmail.com>
+Date:	2009-09-13
+
+    Updated Danish translation
+
+M	po/da.po
+
+commit e5a14d5d899efe4b667dd9d3b7151604df5ba6e7
+Author: Tommi Vainikainen <thv@iki.fi>
+Date:	2009-09-13
+
+    Updated Finnish translation
+
+M	po/fi.po
+
+commit 8c8ee704546406389c0a5559b7a129cce70cda25
+Author: Bruce Cowan <bcowan@fastmail.co.uk>
+Date:	2009-09-12
+
+    Updated British English translation
+
+M	po/en_GB.po
+
+commit 61ab44971d537f6940fb706f8bd1500a731a8a87
+Author: Ani <peter.ani@gmail.com>
+Date:	2009-09-13
+
+    Updaeted Malayalam Translations
+
+M	po/ml.po
+
+commit ac76c1dd3fe82179c86c1301a60062835f00e9a2
+Author: Ask H. Larsen <asklarsen@gmail.com>
+Date:	2009-09-12
+
+    Updated Danish translation
+
+M	po/da.po
+
+commit 7943231d55859d85e6f12343b8668b660f419f73
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-09-11
+
+    Fix a ref leak
+
+    This leak was pointed out by clang, and reported in bug 594832.
+
+M	common/gvfsmountinfo.c
+
+commit b1bc2ec30e6dd97355d550b130c6b5ee24d43d33
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-09-11
+
+    Prevent access to unitialized memory
+
+    Pointed out by clang.
+
+M	monitor/proxy/gvfsproxyvolumemonitordaemon.c
+
+commit fae9389c68811fc3161840ae9897efa63d94d172
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-09-11
+
+    Fix a typo
+
+    Found by clang.
+
+M	monitor/gdu/ggdudrive.c
+
+commit d34a750e152412b31bd5d7a1311ea7c06d37631b
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-09-11
+
+    Prevent access to unitialized memory
+
+    This has been reported by clang.
+
+M	monitor/proxy/gproxymountoperation.c
+
+commit bd98cf81ab1aaec7e088d268f0b5fb6366b5c61f
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-09-11
+
+    Plug a leak in gvfsbackendarchive.c
+
+    clang reported this leak.
+
+M	daemon/gvfsbackendarchive.c
+
+commit 7fb9cb60c85c34b46e563e0ede85060c1f68c284
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-09-11
+
+    Fix a leak in gvfsfusedaemon.c
+
+    This ref leak was reported by clang. Bug 594828.
+
+M	client/gvfsfusedaemon.c
+
+commit a588b41b807c28c1905590bebbcb8602f8f8d69c
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-09-11
+
+    Remove dead code
+
+    This memory leak was reported by clang. Bug 594829.
+
+M	programs/gvfs-mount.c
+
+commit f41574882b828bb848a4a89f72673341b5c82f36
+Author: A S Alam <aalam@users.sf.net>
+Date:	2009-09-11
+
+    Updating Translation for Punjabi
+
+M	po/pa.po
+
+commit ec85e1328f6fa12195f2a519840cd407fb599992
+Author: Gabor Kelemen <kelemeng@gnome.hu>
+Date:	2009-09-10
+
+    Hungarian translation updated
+
+M	po/hu.po
+
+commit 444b09eba240b482f17a53f7c12b027125ca4b8c
+Author: Fábio Nogueira <fnogueira@gnome.org>
+Date:	2009-09-08
+
+    Corrected two quotations marks inconsistencies (we only use double
+    instead of single quotation mark) in Brazilian Portuguese translation
+    file
+
+M	po/pt_BR.po
+
+commit 63e6fb16147a722c2c0ec22f727ddd73eb074b37
+Author: Piotr Drąg <piotrdrag@gmail.com>
+Date:	2009-09-08
+
+    Updated Polish translation
+
+M	po/pl.po
+
+commit d00611aa9391c952ad69c6d384aec6fd1af32bcf
+Author: Sandeep Shedmake <sshedmak@redhat.com>
+Date:	2009-09-08
+
+    Updated Marathi Translations
+
+M	po/mr.po
+
+commit bb72285181c7c920f9fe9d9aa54ba677eabcab56
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-08
+
+    Fix leak in metadata code
+
+M	metadata/metatree.c
+
+commit 7d3f27bf9a94aef335a591bfdc927beacb0bd7a9
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-08
+
+    Fix leak
+
+    Need to free /proc/fd/mountinfo contents after reading it.
+
+M	metadata/metatree.c
+
+commit c77e832a2b138de5507d7bd70f046457860d1e88
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-07
+
+    Fix memory leaks
+
+    Found these with valgrind
+
+M	metadata/metatree.c
+
+commit 3618e00eb921f8d288f57461f0dc7ece5704589b
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-07
+
+    Don't call get_devnum on NULL
+
+M	metadata/metatree.c
+
+commit 76a97491c261165587da0d49c8c6b112d9dd5c2e
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-07
+
+    Post release version bump
+
+M	configure.ac
+
+commit e7cba66c14ce0da07494432078688cb1c32b71f6
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-09-07
+
+    Update NEWS
+
+M	NEWS
+
+commit 372188c402b7d7fdad7e927f5b09b743d938c600
+Author: Chao-Hsiung Liao <j_h_liau@yahoo.com.tw>
+Date:	2009-09-06
+
+    Updated Traditional Chinese translation(Hong Kong and Taiwan)
+
+M	po/zh_HK.po
+M	po/zh_TW.po
+
+commit e467400a75c845539da3a413c259f5e74c26be2d
+Author: Khaled Hosny <khaledhosny@eglug.org>
+Date:	2009-09-05
+
+    Updated Arabic translation
+
+M	po/ar.po
+
+commit b0e4bdf15c0f81d14616173177e28354abf6e560
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-09-03
+
+    Keep track of connection usability for new commands
+
+    Add a waiting_for_reply boolean flag to the connection. Set it when
+    sending a request to the server, clear it after receiving a reply.
+    When trying to push the connection into the connection pool,
+    only allow
+    that when it is not waiting for a reply.
+    This way we fix the case where the task was cancelled while waiting
+    for
+    the reply. It would then ignore the reply and happily push the
+    connection
+    with the pending reply back into the pool, leaving the next one to use
+    it with a stale reply. You can imagine the hilarity that happened from
+    this.
+
+    Also, g_return_if_fail() if trying to send a command when waiting
+    for a
+    reply or when trying to receive a command while not waiting.
+    If it turns out I overlooked a valid case where this can happen, we
+    need to remove those checks. So far I didn't find any.
+
+M	daemon/gvfsftpconnection.c
+
+commit f1c2079b78c8424b83d758f88bfe16027a415b42
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-09-03
+
+    Make this code more robust against quickly opening connections
+
+    - Don't assume a new connection failed when it was cancelled
+    - Only update max_connections when we're the only thread that opened a
+      new connection.
+
+M	daemon/gvfsftptask.c
+
+commit cc768c9f998b0d7700f6dbaf9298489e0d85f4e9
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-09-03
+
+    No need for an extra check - the check is done in the called function
+
+M	daemon/gvfsftptask.c
+
+commit 331e72aac1253419fe211926245ac6fa6895e2d2
+Author: Kjartan Maraas <kmaraas@gnome.org>
+Date:	2009-09-01
+
+    Update Norwegian bokmål translation.
+
+M	po/nb.po
+
+commit 073d612923a1c66e560acbcdf53d4c269a53bde0
+Author: Shankar Prasad <svenkate@redhat.com>
+Date:	2009-09-01
+
+    Updated Kannada(kn) translation
+
+M	po/kn.po
+
+commit 3601b8c461b62de972d7f22fb0edcc61987bfcde
+Author: Duarte Loreto <happyguy_pt@hotmail.com>
+Date:	2009-09-01
+
+    Updated Portuguese translation
+
+M	po/pt.po
+
+commit 3c9e828938625a88f71969c129a0972276b8c99e
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-08-31
+
+    gdu: Pass auth_no_user_interaction option if GMountOperation is NULL
+
+    This avoids e.g. the polkit authentication dialogs at start-up. See
+    http://bugs.freedesktop.org/show_bug.cgi?id=22652 for the whole story.
+
+    Tested-By: Matthias Clasen <mclasen@redhat.com>
+
+M	configure.ac
+M	monitor/gdu/ggduvolume.c
+
+commit d53880d52d995127e4b0288ba30caf5b6fb53d12
+Author: krishnababu k <kkrothap@redhat.ocm>
+Date:	2009-08-31
+
+    Updated Telugu Translations
+
+M	po/te.po
+
+commit 44b7872ef7dd43ce34b60f4abb34d8d69ba66ff2
+Author: Sweta Kothari <swkothar@redhat.com>
+Date:	2009-08-31
+
+    Updated Gujarati Translations
+
+M	po/gu.po
+
+commit 238574d896ead3dbe70fb7b2d961e0467de54a66
+Author: Miloš Popović <mpopovic@src.gnome.org>
+Date:	2009-08-31
+
+    Updated Serbian translation
+
+M	po/sr.po
+M	po/sr@latin.po
+
+commit 8a0be642480d28cff4a0f48dd6d52b94c0c0b273
+Author: Mario Blättermann <mariobl@gnome.org>
+Date:	2009-08-30
+
+    Updated German translation
+
+M	po/de.po
+
+commit 24fff279654aae1a8388f9599a35d5aea57dd6f2
+Author: Ivar Smolin <okul@linux.ee>
+Date:	2009-08-30
+
+    Updating Estonian translation
+
+M	po/et.po
+
+commit d359eec618fb3802ddb929a707f2895bf6f55056
+Author: Baris Cicek <baris@teamforce.name.tr>
+Date:	2009-08-30
+
+    Updated Turkish translation.
+
+M	po/tr.po
+
+commit bd5d27259953fad83a8b1e195e7cf12e4439bf0e
+Author: Claude Paroz <claude@2xlibre.net>
+Date:	2009-08-29
+
+    Updated French translation
+
+    Contributed by Bruno Brouard and Claude Paroz
+
+M	po/fr.po
+
+commit 25205fd28331e991fb21b6486f0463bc5e5de926
+Author: Jorge González <jorgegonz@svn.gnome.org>
+Date:	2009-08-29
+
+    Updated Spanish translation
+
+M	po/es.po
+
+commit fe03cfe2bd8e697a2be53a9eb9cf385b8f826c83
+Author: Changwoo Ryu <cwryu@debian.org>
+Date:	2009-08-29
+
+    Update Korean trnaslation
+
+M	po/ko.po
+
+commit 96615b2a1bc87948f840c63317912967192db38f
+Author: Gil Forcada <gforcada@gnome.org>
+Date:	2009-08-28
+
+    Minor fixes to Catalan translation
+
+M	po/ca.po
+
+commit 75106f317199c2cc364f34aafbccc52e5be28c56
+Author: Carles Ferrando <carles.ferrando@gmail.com>
+Date:	2009-08-28
+
+    Added Catalan (Valencian) translation
+
+M	po/LINGUAS
+A	po/ca@valencia.po
+
+commit 8c36dbadc15786869305997f9eae2aa2236afcf4
+Author: Inaki Larranaga Murgoitio <dooteo@zundan.com>
+Date:	2009-08-27
+
+    Updated Basque language
+
+M	po/eu.po
+
+commit 3cc6a5a7b66d700ebbc3ec24605b2f013f782f86
+Author: Khaled Hosny <khaledhosny@eglug.org>
+Date:	2009-08-27
+
+    Updated Arabic translation
+
+M	po/ar.po
+
+commit 6605591712fe098d10a77b0388c2f397e3150939
+Author: Runa Bhattacharjee <runab@redhat.com>
+Date:	2009-08-27
+
+    Updated Bengali India Translations
+
+M	po/bn_IN.po
+
+commit bacae2cd52394cf797fe87287af82f74e699fcf3
+Author: ifelix <ifelix@redhat.com>
+Date:	2009-08-26
+
+    Updated Tamil Translations
+
+M	po/ta.po
+
+commit 1a1d94b00f619a5fdb8360bb2c84cbbd5616736a
+Author: Kjartan Maraas <kmaraas@gnome.org>
+Date:	2009-08-25
+
+    Updated Norwegian bokmål translation.
+
+M	po/nb.po
+
+commit be3d2792f8d47a0f561520b961e2fe664e0cb705
+Author: Jonh Wendell <jwendell@gnome.org>
+Date:	2009-08-25
+
+    Updated Brazilian Portuguese translation
+
+M	po/pt_BR.po
+
+commit e4524317a54e912a9144677a1bb3fcec4ebe4169
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-08-24
+
+    Post release version bump
+
+M	configure.ac
+
+commit 52fb60bf5fc298ebf83acb666f0d405312006e5d
+Author: Daniel Nylander <po@danielnylander.se>
+Date:	2009-08-24
+
+    Updated Swedish translation
+
+M	po/sv.po
+
+commit a19d1c131fda088c92ae94934d2f1bc0a1fe2f3e
+Author: Jorge González <jorgegonz@svn.gnome.org>
+Date:	2009-08-24
+
+    Updated Spanish translation
+
+M	po/es.po
+
+commit 5c6ae0f7f9617a8fb61774cf8211e362c875dc2a
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-08-24
+
+    Update NEWS
+
+M	NEWS
+
+commit 05a9669be00e55f6b686327da95ffc56220bed22
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-08-24
+
+    Fix up various errors with i18n of programs/*.c
+
+    Lots of not translated strings, some errors did not go to stderr, etc.
+
+M	po/POTFILES.in
+M	programs/gvfs-cat.c
+M	programs/gvfs-copy.c
+M	programs/gvfs-info.c
+M	programs/gvfs-ls.c
+M	programs/gvfs-mkdir.c
+M	programs/gvfs-monitor-dir.c
+M	programs/gvfs-monitor-file.c
+M	programs/gvfs-mount.c
+M	programs/gvfs-move.c
+M	programs/gvfs-open.c
+M	programs/gvfs-rename.c
+M	programs/gvfs-save.c
+M	programs/gvfs-set-attribute.c
+M	programs/gvfs-tree.c
+
+commit f20369496be7bdb7a614916367c6d4fd459dd44a
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-08-24
+
+    Add -f support to gvfs-rm and gvfs-trash
+
+    Also clean up things a bit, and fix up translations.
+
+M	programs/gvfs-rm.c
+M	programs/gvfs-trash.c
+
+commit 8b1d6c56990d2cad60a042065df8947bc104f096
+Author: Jamil Ahmed <itsjamil@gmail.com>
+Date:	2009-08-24
+
+    Added Bengali translation
+
+M	po/LINGUAS
+A	po/bn.po
+
+commit 4e7da90afe3cd869d059c835ec11e2830f341d87
+Author: Mattias Põldaru <mahfiaz gmail com>
+Date:	2009-08-23
+
+    Updating Estonian translation
+
+M	po/et.po
+
+commit 2afeeeb7824199ec9f690b8a7f27976163df4a86
+Author: Changwoo Ryu <cwryu@debian.org>
+Date:	2009-08-23
+
+    Update Korean translation
+
+M	po/ko.po
+
+commit d16888ffc7c9ba407aa3f8ed106e51bf4ed577b7
+Author: Alexander Shopov <ash@contact.bg>
+Date:	2009-08-22
+
+    Updated Bulgarian translation
+
+M	po/bg.po
+
+commit e32c48892a0b714b2d3169709453ee3a6a55114b
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-21
+
+    sftp: return proper error on mkdir when directory exists
+
+    Nautilus depends on properly reported errors when an operation fails.
+    In this case, user was not able to create new directory on sftp share
+    when "untitled folder" already existed.
+
+    SFTP only returns generic SSH_FX_FAILURE code so let's do
+    SSH_FXP_LSTAT
+    on the target file and return proper error.
+
+M	daemon/gvfsbackendsftp.c
+
+commit d7430ddcf8570c9150de3e7abbdca1ce433b62e9
+Author: Alexander Shopov <ash@contact.bg>
+Date:	2009-08-21
+
+    Updated Bulgarian translation
+
+M	po/bg.po
+
+commit 39eb9a0bba7b74394a502147a73d95e560caf5eb
+Author: Khaled Hosny <khaledhosny@eglug.org>
+Date:	2009-08-20
+
+    Updated Arabic translation
+
+M	po/ar.po
+
+commit ce19f20cbb9527131c1d58a1a9565712c4723fa7
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-20
+
+    smb: Limit blocksize for reading to 65534 to get better performance
+
+    "The current code is incredibly inefficient against CIFS servers.
+    It asks for a 65535 byte read, which against Windows servers we must
+    translate into a 65534 byte read (Windows max) followed by a 1
+    byte read."
+
+    See bug 588391 for details.
+
+M	daemon/gvfsbackendsmb.c
+
+commit 9234b9060b37aa5db8b71f4ef37e7eeb9eb1af34
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-19
+
+    [FTP] Fix memleak
+
+M	daemon/gvfsbackendftp.c
+
+commit 2179b65e49860813e36d7ee21618cabeb2f260cb
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-11
+
+    Implement support for g_cancellable_release_fd()
+
+    See bug 591388 and documentation for g_cancellable_release_fd() for a
+    rationale.
+
+    This fix requires glib git master.
+
+M	client/gvfsdaemondbus.c
+M	daemon/soup-input-stream.c
+M	daemon/soup-output-stream.c
+
+commit a8a5d72e58efdf9058e17f045f11d0d6f978703a
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-11
+
+    [FTP] plug memleak in query_info
+
+M	daemon/gvfsbackendftp.c
+
+commit 3d781138af38b84841c1a59a5c959ac3a412686c
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-11
+
+    [FTP] plug memleak in login code
+
+M	daemon/gvfsbackendftp.c
+
+commit 42bab3f1fe676ad2b089c321ac0a06e16d0feb15
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-10
+
+    [FTP] Plug memleak
+
+M	daemon/gvfsftptask.c
+
+commit aaf322ae906589204812b0466a9f6c68b9d02571
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-10
+
+    [FTP] plug memleak
+
+M	daemon/gvfsftptask.c
+
+commit 8b97c4a5a7e5a0a16593a405ffa849835f645072
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-18
+
+    Avoid deadlock when pulling resolved dns-sd record from cache
+
+    When the host has already been resolved and is present in cache,
+    it's returned immediately. But we always started a mainloop
+    resulting in endless waiting for an event which had been received
+    before that. This applies for the sync call.
+
+    This is just a workaround, the sync code should be ported over avahi.
+    See bug 555436 (comments 30-32) for details.
+
+M	common/gvfsdnssdresolver.c
+
+commit a86f1a8fb7ecd5a8e3e22d7f95c4f022ba3e7211
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-18
+
+    Bump SFTP timeout to 40 seconds
+
+    While this is not universal, let's give users more space for their
+    slow machines (imagine an old 486SX).
+
+    Requested in Fedora bug 504339.
+
+M	daemon/gvfsbackendsftp.c
+
+commit 226a763614fbe3093fcde175ea5d6d569b610eaf
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-18
+
+    Canonicalize mount prefix to prevent mountspec matching issues
+
+    This prevents mismatches during mount spec comparation, e.g. with
+    trailing slash in mount_prefix ("/subdir" vs. "/subdir/").
+
+    See bug 590730 for details.
+
+M	common/gmountspec.c
+
+commit 2b4d11a7e0eee6a6cd24234fdbdeae1672323cd3
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-18
+
+    GDaemonMount calculates wrong root path when mount_prefix is set
+
+    When a mount is mounted with a mount_prefix != "/", GDaemonMount
+    calculates
+    wrong root path, causing breakage of the .gvfs FUSE mount, and
+    making the
+    mounts unclickable in Nautilus.
+
+    Patch by Mads Chr. Olesen, see bug 590730 for details.
+
+M	client/gdaemonmount.c
+
+commit 13ae4361636faf02d34c703986a470a6d2bae80c
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-18
+
+    Include mount prefix when constructing fuse path
+
+    On complex URIs like 'dav://server/gallery/w/TestAlbum',
+    g_file_get_path () would return incomplete path without the
+    middle '/gallery/w' part (mount prefix). This patch ensures
+    full path to be returned.
+
+    See bug 590862 for details.
+
+M	client/gdaemonvfs.c
+
+commit 893a6ef066756ac5f996d7f518034b1b1901eaa5
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-08-17
+
+    Fix various memory leaks
+
+    Testing a simple loop of writes long enough to cause a log wrap
+    showed a bunch of leaks in valgrind. This fixes them all.
+
+M	metadata/metabuilder.c
+M	metadata/metatree.c
+
+commit 612452d52c1806696ef0c45f0b27ce6d07e315a3
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-08-17
+
+    Free MetaBuilder when rolling over log
+
+M	metadata/metatree.c
+
+commit 6c4354f0230834465153263f1cbdba1e40e56fba
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-08-17
+
+    Return success when rotating log succeeded
+
+    We succeeded and then said we didn't, causing the set operation
+    that caused the rotation to fail.
+
+M	metadata/metatree.c
+
+commit 3faff0f910ba811db5ec044b2058c6dfdccd56f1
+Author: Antón Méixome <meixome@mancomun.org>
+Date:	2009-08-17
+
+    Updated Galician Translation
+
+M	po/gl.po
+
+commit 99e27b7e302de34e7f09696bd6d15d09897461ad
+Author: Seán de Búrca <leftmostcat@gmail.com>
+Date:	2009-08-17
+
+    Updated Irish translation
+
+M	po/ga.po
+
+commit 4e6958afde325bee0289266723c78a150f763b3b
+Author: Tommi Vainikainen <thv@iki.fi>
+Date:	2009-08-16
+
+    Updated Finnish translation
+
+M	po/fi.po
+
+commit 111a9be27cbf0d7ce1b8520e38eac8c80fe0ab58
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-08-14
+
+    Turn off debugging spew in gphoto2 and proxy monitors
+
+M	monitor/gphoto2/ggphoto2volumemonitor.c
+M	monitor/proxy/gvfsproxyvolumemonitordaemon.c
+
+commit 06bb4ae4796719b46e67f089fab9d18e82e47e23
+Author: Bastien Nocera <hadess@hadess.net>
+Date:	2009-08-14
+
+    Bug 591808 – Proxy monitor code crashes when volume has no HAL UDI
+
+    D-Bus doesn't like NULL strings, and the proxy code will
+    crash if we don't have a HAL UDI.
+
+M	monitor/proxy/gvfsproxyvolumemonitordaemon.c
+
+commit 1d28269cc6d9151786ea8d0d1790f48ab138ba34
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-08-14
+
+    gphoto2: Handle removal of camera with multiple storage heads
+
+M	monitor/gphoto2/ggphoto2volumemonitor.c
+
+commit 15e1574581d811cdf0f5d365e823f05e243f09ac
+Author: Paolo Borelli <pborelli@gnome.org>
+Date:	2009-08-14
+
+    Bump GDU requirements to match reality
+
+M	configure.ac
+
+commit 04c454720b6fd460247e4c7007b09ce201f2d11b
+Author: Rajesh Ranjan <rranjan@rranjan.csb>
+Date:	2009-08-14
+
+    hindi update
+
+M	po/hi.po
+
+commit 6363fbf023808bad0bcc22715e451ae0f74ee868
+Author: Vladimir Melo <vmelo@gnome.org>
+Date:	2009-08-13
+
+    Updated Brazilian Portuguese translation.
+
+M	po/pt_BR.po
+
+commit f9b0e8a702dfeebbbf60e6baff0802fe8954ff96
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-08-10
+
+    Bump version
+
+M	configure.ac
+
+commit 928347e1297b4a959b5194e19561428a2307fb76
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-08-10
+
+    Update NEWS
+
+M	NEWS
+
+commit 03a8bc40e54536629b8c152f57e4686f526fe038
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-10
+
+    [FTP] Properly close output stream in GVfsJobPull
+
+    Don't leak output filedescriptor
+
+M	daemon/gvfsbackendftp.c
+
+commit 2f2e67a357c98aede7df3b8f3f38595afcc881f4
+Author: Antón Méixome <meixome@mancomun.org>
+Date:	2009-08-10
+
+    Updated Galician translation
+
+M	po/gl.po
+
+commit 46c5815654d18b7c4de0387207d6bce4a6f9787f
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-10
+
+    Bug 589434 - gvfsd-sftp crashed with SIGSEGV in strlen()
+
+    Remove unneeded typecast causing segfaults
+
+M	daemon/gvfsbackendsftp.c
+
+commit bd3a204ee656e28deabf5ea28c6d419194d688a9
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-10
+
+    [FTP] Correctly close finished transfer
+
+    Re-add from commit 9c80d1ea68314ccd3b44d3a6c3761b1e42699953
+
+M	daemon/gvfsbackendftp.c
+
+commit aede024c51675989b734532a9c4f6b499065bbc1
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-10
+
+    [FTP] Fix fallout from Mozilla upstream merges
+
+    Mozilla only strips \r characters when the lines ist terminated with
+    \r\n but not when terminated with \r\0, so we strip the line
+    terminator
+    ourselves perfore passing the string to ParseFTPList().
+
+M	daemon/gvfsftpdircache.c
+
+commit a8e3135a0c13b85b0d917c22371f8478c9f9afde
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-10
+
+    [FTP] Remove unecessary function call
+
+    The matcher is ignored in g_file_info_copy_into().
+
+M	daemon/gvfsbackendftp.c
+
+commit 9c80d1ea68314ccd3b44d3a6c3761b1e42699953
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-10
+
+    [FTP] Don't add random bytes whenever we send a progress notification
+
+    The code previously did update the write counters after being
+    interrupted for progress updates. That would cause it to insert
+    a random
+    byte for every time it sent a progress update from the write loop.
+
+    Noticed by Tomas Bzatek - sorry about your mp3s :(
+
+M	daemon/gvfsbackendftp.c
+
+commit fb45c08fac5219b26f278aa452bc26108a0c8f3f
+Author: Michal Novotny <michal@allpeers.com>
+Date:	2009-08-10
+
+    Bug 576229 – Doesn't handle files with leading space (upstream)
+
+    ParseFTPList can't handle regular unix ls -l listing of filenames
+    starting with spaces
+
+    upstream references:
+    http://bugzilla.mozilla.org/show_bug.cgi?id=484684
+    http://hg.mozilla.org/mozilla-central/rev/179c6f22d6f2
+
+M	daemon/ParseFTPList.c
+
+commit d59c121f60ec98f8241dcd611124510ceddaadfa
+Author: Michal Novotny <michal@allpeers.com>
+Date:	2009-08-10
+
+    "The FTP folder won't open!" (upstream)
+
+    - space and tab at the end of filename in Unix and DOS style listings
+    - date in DOS listing, short variants of year 00-80 were badly
+    converted
+      to 100-180, years 81+ weren't changed at all
+    - enhanced logic when searching for symlink name in Unix style listing
+    - regular files with sequence " -> " in name aren't now incorrectly
+      detected as symlinks (DOS and Unix style listing only)
+
+    upstream references:
+    http://bugzilla.mozilla.org/show_bug.cgi?id=365133
+    http://hg.mozilla.org/mozilla-central/rev/b79bc71c6832
+
+M	daemon/ParseFTPList.c
+
+commit 12c9c9ae561f9c572ec137d78c6da3bf9ba520bf
+Author: Martin Pitt <martin.pitt@ubuntu.com>
+Date:	2009-07-16
+
+    port gphoto2 backend and monitor to gudev
+
+    This works with the ID_GPHOTO2 attribute, which was recently added to
+    libgphoto2:
+    http://sourceforge.net/tracker/?func=detail&aid=2801117&group_id=8874&atid=308874
+
+    That initial libgphoto2 patch does not yet pass the actual name,
+    and just sets
+    ID_GPHOTO2="1". However, in this patch we check if it's not "1",
+    and use that
+    as volume name (since it's the "best" one). Otherwise fall back to
+    usb_id and
+    sysfs vendor/model/product names.
+
+    This also supports ID_MEDIA_PLAYER* attributes for media players
+    with gphoto
+    support. Please see here for the discussion and development progress:
+    http://lists.freedesktop.org/archives/devkit-devel/2009-June/000226.html
+    http://cgit.freedesktop.org/~teuf/media-player-id/
+
+    http://bugzilla.gnome.org/show_bug.cgi?id=586410
+
+    Signed-off-by: David Zeuthen <davidz@redhat.com>
+
+M	configure.ac
+M	daemon/Makefile.am
+M	daemon/gvfsbackendgphoto2.c
+M	monitor/gphoto2/Makefile.am
+M	monitor/gphoto2/ggphoto2volume.c
+M	monitor/gphoto2/ggphoto2volume.h
+M	monitor/gphoto2/ggphoto2volumemonitor.c
+
+commit 21383e40e4cadf52f2bbf9ba463b9e85d02e122e
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-06
+
+    [FTP] Bug 590793 - Can't copy folders over FTP
+
+    Duplicate the machinery for returning the proper error when the source
+    is a directory from gio and use it in the pull vfunc.
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsftptask.h
+
+commit c81297016b0d089acfba393d02cb09731faa21d3
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-06
+
+    [FTP] Do not lose info in cache
+
+    As gvfs_job_enumerate_add_info() modifies the passed info, we cannot
+    pass the cached items directly. So we do a copy instead.
+
+M	daemon/gvfsbackendftp.c
+
+commit 4c82ce44f20ff5109798623eaa16e784efe72571
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-08-06
+
+    [FTP] Open source before target in pull method
+
+    This way, we don't leave empty target files when opening the source
+    resulted in an error.
+
+    Also included is some code clarification.
+
+M	daemon/gvfsbackendftp.c
+
+commit 7ad013a67385168452d97280a877b925f07e848b
+Author: Claude Paroz <claude@2xlibre.net>
+Date:	2009-08-06
+
+    Updated French translation
+
+    Contributed by Nicolas Repentin and Claude Paroz
+
+M	po/fr.po
+
+commit 8056474d0334e9f37b31dc885c082b6cac090d72
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-08-06
+
+    smb-browse: fake content type to allow query default handler
+
+    Hardcode the "inode/directory" content-type
+    Fixes #573994
+
+M	daemon/gvfsbackendsmbbrowse.c
+
+commit 59ae5fb9cd57d00fe9de2eedfd73f30aad6a2348
+Author: Kjartan Maraas <kmaraas@gnome.org>
+Date:	2009-08-05
+
+    Updated Norwegian bokmål translation.
+
+M	po/nb.po
+
+commit a3979cd918d366be7850ca558b3040b8d2d0322d
+Author: Peter Waller <peter.waller@gmail.com>
+Date:	2009-08-04
+
+    Bug 589915 - gedit crashed with SEGV in strlen()
+
+    FIx a crash introduced by commit c372064a where it was forgotten do
+    adapt the function signature of a callback
+
+M	client/gdaemonfileoutputstream.c
+
+commit 553ab151148e1f263960f5976eb6a5405ab8ae7e
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-07-31
+
+    Bug 588187 – Large FTP transfers hang gvfsd-ftp
+
+    Enable keepalive on the command connection. See the comment in the
+    source code or the bug report for a detailed explanation.
+
+M	daemon/gvfsftpconnection.c
+
+commit 66502006dc968b05d095f08e108cc82bacfb3038
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-08-01
+
+    Plug various metadata-related memleaks
+
+    These were reported in bug 590456.
+
+M	client/gdaemonvfs.c
+M	metadata/metatree.c
+
+commit 20fdd8d01515c8b40aa24de196e69d4990953844
+Author: Joe Marcus Clarke <marcus@freebsd.org>
+Date:	2009-07-31
+
+    Fix a symbol conflict with crc32
+
+    On FreeBSD, the crc32 symbol conflicts with a function of the same
+    name in libz, causing segfaults. Fixes bug 589786.
+
+M	metadata/crc32.c
+M	metadata/crc32.h
+M	metadata/metatree.c
+
+commit aaeadcc0350c725d5f2bec092aabb477d8c74ea4
+Author: Matthias Clasen <mclasen@redhat.com>
+Date:	2009-07-29
+
+    Post-release version bump
+
+M	configure.ac
+
+commit 69309d4f1321f37e87bba47a53e00b12d88cd653
+Author: Ivar Smolin <okul@linux.ee>
+Date:	2009-07-23
+
+    Updating Estonian translation
+
+M	po/et.po
+
+commit 5db48c92d97b7d7348bcb6e8f256d2b0993ced4f
+Author: Daniel Nylander <po@danielnylander.se>
+Date:	2009-07-22
+
+    Updated Swedish translation
+
+M	po/sv.po
+
+commit dd2691e069e6de082ae150022c5688164e737df6
+Author: Kjartan Maraas <kmaraas@gnome.org>
+Date:	2009-07-22
+
+    Updated Norwegian bokmål translation.
+
+M	po/nb.po
+
+commit 4f6726a407d9af5fe3787d6c93a9936fa08131f0
+Author: A S Alam <aalam@users.sf.net>
+Date:	2009-07-21
+
+    Updating Punjabi Translaiton
+
+M	po/pa.po
+
+commit b49421d78e4da73b6955fb96906a2a9260a8f8dc
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-07-20
+
+    Do not free reply in this error case, as it hasn't been set
+
+M	daemon/gvfsftptask.c
+
+commit 4255792153906238a67e4a4d748ba71b52d663be
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-07-20
+
+    Make debug output for progress callbacks really work with large files
+
+    Fixes omission of % in commit 66df9e764aed43b23b5c3326ff9ab024b0a49124
+
+M	daemon/gvfsjobcopy.c
+M	daemon/gvfsjobmove.c
+M	daemon/gvfsjobpull.c
+M	daemon/gvfsjobpush.c
+
+commit f64b26a5762659d9eb24ab79c4e64acc8d35ee8e
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-07-20
+
+    When a p2p connection is closed, cancel all pending jobs
+
+    Not cancelling them caused long running jobs - like a GvfsJobPull
+    for a
+    multi-GB file on a remote ftp mount - to not stop running and finish
+    downloading the file.
+
+M	daemon/gvfsdaemon.c
+
+commit 96efbdf2b49ccf79f79ebd588ac10313cc1c2a0d
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-07-20
+
+    Use dash for proeprty name, not underline
+
+M	daemon/gvfsdaemon.c
+
+commit df28b6e600d79eafca4e75049cb81427086178d7
+Author: Cosimo Cecchi <cosimoc@gnome.org>
+Date:	2009-07-20
+
+    Initialize the DBus error
+
+    Initialize the DBus error structure before calling
+    dbus_bus_request_name().
+    Fix bug #589015, patch by Patryk Zawadzki.
+
+M	metadata/meta-daemon.c
+
+commit ff120f07aa8807b96ba79b2415715205a92db2ae
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-07-20
+
+    Make gvfsd-ftp no longer conditionally built
+
+    It doesn't require libsoup anymore after all.
+
+M	daemon/Makefile.am
+
+commit 66df9e764aed43b23b5c3326ff9ab024b0a49124
+Author: Andreas Henriksson <andreas@fatal.se>
+Date:	2009-07-19
+
+    Make debug output for progress callbacks work with large files
+
+    Without this patch, the debug output would easily overflow, as it was
+    cast to int.
+
+M	daemon/gvfsjobcopy.c
+M	daemon/gvfsjobmove.c
+M	daemon/gvfsjobpull.c
+M	daemon/gvfsjobpush.c
+
+commit 1464c21cd3a55ea6ad2f8893e138995159a22281
+Author: Ivar Smolin <okul@linux.ee>
+Date:	2009-07-19
+
+    Updating Estonian translation
+
+M	po/et.po
+
+commit 1abbeed14a181d09ca2dbeb1b93212d0a6849b79
+Author: Chao-Hsiung Liao <j_h_liau@yahoo.com.tw>
+Date:	2009-07-18
+
+    Updated Traditional Chinese translation(Hong Kong and Taiwan)
+
+M	po/zh_HK.po
+M	po/zh_TW.po
+
+commit a9960b04cb690ceb48c19d02f37d54c3d98b7f65
+Author: Jorge González <jorgegonz@svn.gnome.org>
+Date:	2009-07-18
+
+    Updated Spanish translation
+
+M	po/es.po
+
+commit ff11ba45de39309b406eadd41f7297413005d1e1
+Author: drtvasudevan <agnihot3@gmail.com>
+Date:	2009-07-18
+
+    Updated Tamil translation
+
+M	po/ta.po
+
+commit 921c9d350d50a25573ac48b8b0b1c23326654686
+Author: drtvasudevan <agnihot3@gmail.com>
+Date:	2009-07-18
+
+    Updated Tamil translation
+
+M	po/ta.po
+
+commit a287d9dbba61d72c6094e3f833c1e6515a3de900
+Author: Colin Walters <walters@verbum.org>
+Date:	2009-07-15
+
+    Call dbus_threads_init_default before doing any other dbus calls
+
+    This avoids race conditions with other threads; there are various
+    internal mutexes involved in dbus_bus_get_private that need to
+    be locked if g_vfs_get_default is called from a non-main thread.
+
+M	client/gdaemonvfs.c
+
+commit 80514a7a27e4383b0fc859ecfcb5744c1ea59318
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-07-13
+
+    Post-release version bump to 1.3.3
+
+M	configure.ac
+
+commit a06766e9fd026f48579351a5f56f57bef1ef2846
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-07-13
+
+    Update NEWS for release
+
+M	NEWS
+
+commit 197a9d0b89a563965ef0f411b00dfb73d7eaea2e
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-07-13
+
+    Fix 'make distcheck'
+
+    In particular this snippet
+
+     giomodulesdir=`pkg-config --variable=giomoduledir gio-2.0`
+
+    is wrong as it breaks 'make distcheck' unless you can write to where
+    the gio modules are installed. While this is true for jhbuild setups
+    it is patently not true for normal setups.
+
+    In fact, one could argue that glib's --with-gio-module-dir option is
+    incompatible with how we build things, but that is more of a GLib
+    problem.
+
+M	configure.ac
+M	metadata/Makefile.am
+M	po/POTFILES.in
+
+commit fbaf454157cd8006ba0746327fbb865fe258c310
+Author: Maxim V. Dziumanenko <dziumanenko@gmail.com>
+Date:	2009-07-09
+
+    Updated Ukrainian translation
+
+M	po/uk.po
+
+commit fd79935a0d841369d6d24b7bd957e428570b5f18
+Author: drtvasudevan <agnihot3@gmail.com>
+Date:	2009-07-09
+
+    Updated Tamil translation
+
+M	po/ta.po
+
+commit 30f444d3b6a390262e7acd4b7656b7ba7bc28db9
+Author: Jorge González <jorgegonz@svn.gnome.org>
+Date:	2009-07-08
+
+    Updated Spanish translation
+
+M	po/es.po
+
+commit 1495ad1fefac1e7d0861095793c337ab478c1748
+Author: Martin Pitt <martin.pitt@ubuntu.com>
+Date:	2009-07-03
+
+    conditionalize hal support in obexftp backend
+
+    The obexftp backend only uses hal for finding devices with the "obex"
+    capability if the gvfs device path starts with "usb". However,
+    neither hal nor
+    bluez actually provide devices with this capability, and the obexftp
+    backend
+    works fine with obex:// gvfs mounts without hal.
+
+    Conditionalize hal support to only query hal if libhal is available.
+
+    http://bugzilla.gnome.org/show_bug.cgi?id=586411
+
+M	configure.ac
+M	daemon/Makefile.am
+M	daemon/gvfsbackendobexftp.c
+
+commit ebaa763b87523cb39076a5ea98065300cf154d43
+Author: Martin Pitt <martin.pitt@ubuntu.com>
+Date:	2009-06-20
+
+    cdda backend: support and prefer gudev
+
+    Change build system to check for libgudev, and use it (and prefer
+    over hal) in
+    the cdda backend. As before, if neither hal nor gudev are available,
+    cdda is
+    not built.
+
+    http://bugzilla.gnome.org/show_bug.cgi?id=586409
+
+M	configure.ac
+M	daemon/Makefile.am
+M	daemon/gvfsbackendcdda.c
+
+commit 8af5a5581e11d9c07e8ba3a17eb2cc93b5c70631
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-30
+
+    Bug 587484 – Interaction when unmounting mounts and misc fixes
+
+    - Port everything to use _with_operation() variants of unmount/eject
+       methods
+
+     - Add support for g_file_poll_mountable()
+       - new job class: GVfsJobPollMountable
+
+     - Pass mount operation for unmount/eject ops on GDaemonFile and
+       GDaemonMount
+       - receive in the appropriate GVfsJob classes
+       - also pass unmount flags where it was missing
+       - port all backends to use this
+
+     - Teach GMountSource and GMountOperationDBus about the new
+       GMountOperation::show-processes signal
+       - also provide new API
+	 - g_mount_source_is_dummy() - e.g. when the client didn't
+	   passed NULL for the GMountOperation
+	 - g_mount_source_abort() - to send the ::abort signal to the
+	   client-side GMountOperation
+	 - make the client-side of GMountSource return ::reply with
+	   NOT_HANDLED when we do an abort
+
+     - Refactor the mount operation handling in GProxyVolumeMonitor
+
+     - Pass mount operation for unmount/ejects in GProxyVolumeMonitor
+
+     - Pass the process id of the actual reader/writer in OpenForRead
+       and OpenForWrite daemon methods
+       - add some private API for making the FUSE client set the
+	 pid of the POSIX client (otherwise it looks like the FUSE
+	 client is blocking) and pass the right pid.
+
+	 This is because the FUSE client is basically impersonating the
+	 POSIX processes.
+
+     - Make the process id mentioned above available in appropriate
+       GVfsJob classes
+       - GVfsJobOpenForRead
+       - GVfsJobOpenForWrite
+       - GVfsChannel
+
+     - Provide API to get a list of all blocking clients, e.g. an array
+       of GPid
+       - g_vfs_daemon_get_blocking_processes()
+
+     - Provide convenience API to easily doing the right thing on unmount;
+       e.g. interact with the user about blocking processes - see
+       the gphoto2
+       backend for example usage
+       - g_vfs_backend_has_blocking_processes()
+       - g_vfs_backend_unmount_with_operation() and
+	 g_vfs_backend_unmount_with_operation_finish()
+
+     - Only the gphoto2 backend supports ::show-processes right
+     now. Support
+       for other backends will be added shortly.
+
+     - Implement support for ::show-processes in the GDU volume monitor
+       - right now we don't support "Unmount Anyway" since it requires
+	 ABI changes in libgdu.so - this will be changed as soon as
+	 there's
+	 a new gnome-disk-utility release
+
+M	client/gdaemonfile.c
+M	client/gdaemonmount.c
+M	client/gvfsfusedaemon.c
+M	common/gmountoperationdbus.c
+M	common/gmountsource.c
+M	common/gmountsource.h
+M	common/gvfsdaemonprotocol.h
+M	daemon/Makefile.am
+M	daemon/gvfsbackend.c
+M	daemon/gvfsbackend.h
+M	daemon/gvfsbackendarchive.c
+M	daemon/gvfsbackendcdda.c
+M	daemon/gvfsbackendcomputer.c
+M	daemon/gvfsbackenddav.c
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsbackendgphoto2.c
+M	daemon/gvfsbackendlocaltest.c
+M	daemon/gvfschannel.c
+M	daemon/gvfschannel.h
+M	daemon/gvfsdaemon.c
+M	daemon/gvfsdaemon.h
+M	daemon/gvfsjobopenforread.c
+M	daemon/gvfsjobopenforread.h
+M	daemon/gvfsjobopenforwrite.c
+M	daemon/gvfsjobopenforwrite.h
+C071	daemon/gvfsjobstopmountable.c	daemon/gvfsjobpollmountable.c
+C055	daemon/gvfsjobstopmountable.h	daemon/gvfsjobpollmountable.h
+M	daemon/gvfsjobstopmountable.c
+M	daemon/gvfsjobstopmountable.h
+M	daemon/gvfsjobunmount.c
+M	daemon/gvfsjobunmount.h
+M	daemon/gvfsjobunmountmountable.c
+M	daemon/gvfsjobunmountmountable.h
+M	daemon/gvfsreadchannel.c
+M	daemon/gvfsreadchannel.h
+M	daemon/gvfswritechannel.c
+M	daemon/gvfswritechannel.h
+M	monitor/gdu/ggdudrive.c
+M	monitor/gdu/ggdumount.c
+M	monitor/gdu/ggduvolume.c
+M	monitor/hal/ghaldrive.c
+M	monitor/hal/ghalmount.c
+M	monitor/hal/ghalvolume.c
+M	monitor/proxy/Makefile.am
+M	monitor/proxy/gproxydrive.c
+M	monitor/proxy/gproxymount.c
+A	monitor/proxy/gproxymountoperation.c
+A	monitor/proxy/gproxymountoperation.h
+M	monitor/proxy/gproxyshadowmount.c
+M	monitor/proxy/gproxyvolume.c
+M	monitor/proxy/gproxyvolume.h
+M	monitor/proxy/gproxyvolumemonitor.c
+M	monitor/proxy/gvfsproxyvolumemonitordaemon.c
+M	programs/gvfs-mount.c
+
+commit c33e26d3914e0659d4a317fda7fe9acbb6269dc9
+Author: Daniel Nylander <po@danielnylander.se>
+Date:	2009-07-07
+
+    Updated Swedish translation
+
+M	po/sv.po
+
+commit d907e07f5368e3099c0a4328f1d1d1c8dc4c62d9
+Author: drtvasudevan <agnihot3@gmail.com>
+Date:	2009-07-03
+
+    Updated Tamil translation
+
+M	po/ta.po
+
+commit 803e3b4edf602e0284864c5469bcbf60445576da
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-07-01
+
+    Update for glib API changes
+
+    g_socket_accept got a new cancellable argument
+
+M	daemon/gvfsftpconnection.c
+
+commit 407f964a390c452bfbd773a721ecbe2609ce4b88
+Author: Cosimo Cecchi <cosimoc@gnome.org>
+Date:	2009-06-30
+
+    Plug some leaks and fix some strings.
+
+M	metadata/meta-daemon.c
+M	metadata/metabuilder.c
+
+commit f4250f3fcd178ad4f15ba5a1672ecbca1e2b67c2
+Author: Jorge Gonzalez <jorgegonz@svn.gnome.org>
+Date:	2009-06-27
+
+    Updated Spanish translation
+
+M	po/es.po
+
+commit 36d06a5fb2ff170fb2388d0afc82df954383b453
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Avoid deadlock on cancelling async enumerate_children
+
+    We can't call g_cancellable_disconnect from inside the cancel signal
+    emission, as that deadlocks. However we know if that happens and can
+    use the regular disconnect.
+
+    Also, we need to grab the infos lock when calling trigger_async_done,
+    this
+    was only done in some cases, now its always done.
+
+M	client/gdaemonfileenumerator.c
+
+commit b548be8088f83b8cdeb66198e6092edfa518613d
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Implement metadata setting for remote locations
+
+M	client/gdaemonfile.c
+M	client/gdaemonfile.h
+M	client/gdaemonfileenumerator.c
+M	client/gdaemonfileenumerator.h
+M	client/gdaemonvfs.c
+M	client/gdaemonvfs.h
+
+commit 2eb9e35ccf5112a6f01225c97b05e90eca8c7ea9
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Add header include protection and boilerplate
+
+M	metadata/metabuilder.h
+M	metadata/metatree.h
+
+commit 36e09422846f3456b45d977cfec20f485a559a4a
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Implement a dbus based metadata get call
+
+M	common/gvfsdaemonprotocol.h
+M	metadata/meta-daemon.c
+
+commit 581e92869175e4d9da59ba9b087690350ed59c25
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Remove spew from gmountspec changes
+
+M	common/gmountspec.c
+
+commit eb6965ed272463b80469e75610d82664ecc96dee
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Make g_mount_spec_to_string generate a "nicer" string
+
+    We'll be showing this of publically as the id of metadata databases,
+    so
+    it better be somewhat shorter and nicer.
+
+M	common/gmountspec.c
+
+commit 3f58e22c03ee79744b069c6911ca0243da99624a
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Fix up GFileInfo marshalling
+
+M	common/gvfsdaemonprotocol.c
+
+commit 10abe67d01e5d0845727446471159ed02584547d
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    (de)marshal the attribute status in GFileInfo
+
+M	client/gdaemonfile.c
+M	common/gvfsdaemonprotocol.c
+M	common/gvfsdaemonprotocol.h
+M	common/gvfsfileinfo.c
+M	daemon/gvfsjobsetattribute.c
+
+commit 48842732168909ce3b4c9136a28c2e5a5a25d98b
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Support (de)marshalling of new GFileInfo keys (invalid & stringv)
+
+M	common/gvfsdaemonprotocol.c
+M	common/gvfsfileinfo.c
+
+commit b305422b727c3ca5d30f4c9f97cf8fd779410398
+Author: Mattias Põldaru <mahfiaz gmail com>
+Date:	2009-06-25
+
+    Updating Estonian translation
+
+M	po/et.po
+
+commit c372064a04f8c24efdb99a3b0811bd17ddfb2176
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-25
+
+    try extra hard to make sure operations get cancelled properly
+
+    Previously there were some rather big windows that allowed for races
+    between cancelling and calling g_simple_async_result_complete().
+    This code makes sure we check for cancellaton right before calling
+    g_simple_async_result_complete(), which gets rid of that window and
+    gives you the guarantee that cancelling an operation in the main
+    thread
+    will indeed return a CANCELLED error.
+
+M	client/gdaemonfile.c
+M	client/gdaemonfileinputstream.c
+M	client/gdaemonfileoutputstream.c
+M	client/gvfsdaemondbus.c
+M	client/gvfsdaemondbus.h
+M	client/gvfsiconloadable.c
+
+commit 133bd0ec75a94b8316b56c252dfc62a3ed23fade
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-25
+
+    include locale.h for setlocale() call
+
+M	metadata/meta-daemon.c
+
+commit 74b5208891e87f88f5902c427fe63bf2bf67257e
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Support unsetting metadata in g_file_set_attributes_from_info()
+
+M	client/gdaemonvfs.c
+
+commit 4d7f64d2060884441d39726ce03393b2db597e06
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Allow unsetting keys with the standard Set dbus operation
+
+    Passing a key value type of Byte means unset that key.
+
+M	metadata/meta-daemon.c
+
+commit 68607708bc34cfdc357a823fb6f909d3696fec78
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-25
+
+    Allow unsetting attributes with gvfs-set-attributes
+
+M	programs/gvfs-set-attribute.c
+
+commit 560b79555daead815b378a87f53fde150d4e4ca0
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-23
+
+    Short circuit metadata setting if no change
+
+M	client/gdaemonvfs.c
+
+commit 5fb558770f0a3f3c7d277855700e6812c01a9762
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-23
+
+    Fix deadlock in MetaTree
+
+    meta_tree_refresh calls meta_tree_init which may call
+    meta_tree_refresh, which can deadlock due to the writer lock. Call
+    meta_tree_refresh_locked instead.
+
+M	metadata/metatree.c
+
+commit 454a365b0b53cce2010787f6eb4ee28c321a6375
+Author: Andreas Henriksson <andreas@fatal.se>
+Date:	2009-06-23
+
+    Don't show not requested info in gvfs-info (#582175)
+
+    For example:
+    vuntz@lyon ~/>gvfs-info -a standard::content-type ~/blah.txt
+    type: unknown
+    size: 0
+    attributes:
+      standard::content-type: text/plain
+
+    type and size probably shouldn't be displayed if a specific
+    attribute was
+    requested..
+
+M	programs/gvfs-info.c
+
+commit 2f253cbcd62e07e44c8643ad95d8fabcc1e39b77
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-20
+
+    Update gitignore for new files
+
+M	metadata/.gitignore
+
+commit bad7cc5631d046aafd00d3c22ab7486cef5e43e6
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-18
+
+    Implement the metadata addition api in GVfs
+
+    This uses the metadata library to add metadata to GFileInfo for
+    local files.
+
+M	client/Makefile.am
+M	client/gdaemonvfs.c
+
+commit 3dfd6eaaaaba5e914c6f2269dce98854fa84deb5
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Add various metadata test programs
+
+    These are useful to interactively test the metadata stores but
+    are not installed.
+
+M	metadata/Makefile.am
+A	metadata/meta-get-tree.c
+A	metadata/meta-get.c
+A	metadata/meta-ls.c
+A	metadata/meta-set.c
+
+commit bb7cc90200c7eccce9a6b6622b191548b5e26586
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-20
+
+    Add gvfsd-metadata update daemon
+
+    This daemon singleton handles updates to metadata stores.
+    All clients that wishes to write metadata should talk to
+    it via dbus.
+
+    This way all writes are serialized to avoid data loss on
+    concurrent writes.
+
+M	common/gvfsdaemonprotocol.h
+M	metadata/Makefile.am
+A	metadata/gvfs-metadata.service.in
+A	metadata/meta-daemon.c
+
+commit 192d3a7db50e42ad40aea8311e1994f53a1efdc0
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-23
+
+    Allow MetaTree open to succeed with no file
+
+    You can check with meta_tree_exists if the file actually exists.
+    This means that lookups work better for the initial set for a
+    non-existing
+    file.
+
+M	metadata/metatree.c
+M	metadata/metatree.h
+
+commit 576f893d4d75900d777f76450ccf5784641908ce
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-23
+
+    Add meta_tree_remove and meta_tree_copy
+
+M	metadata/metatree.c
+M	metadata/metatree.h
+
+commit c8551bb6755c19c9ab254d9c647e393561ec4aef
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Fix metadata file rotation
+
+    Ensure we open in read/write mode
+    Use mmap to set the rotated flag to avoid any confusion with mixing
+    write and mmap updates.
+
+M	metadata/metabuilder.c
+
+commit 589ad8dc3f3bb6b13402170fdf765fba6e2c73d0
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Add workaround for ESTALE on NFS for metadata files
+
+M	configure.ac
+M	metadata/metatree.c
+
+commit 14f92f57f36e5a5b245e747b5fe0840936137c3d
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Implement unset key in MetaTree
+
+M	metadata/metatree.c
+
+commit 57e0344d2e0d406dde842c0031c77ad0eddc43b3
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Implement setting stringv in MetaTree
+
+M	metadata/metatree.c
+M	metadata/metatree.h
+
+commit 86952f9372709c264a0f273022920af039902d56
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Finish mtime reading support in MetaTree
+
+M	metadata/metatree.c
+
+commit dca2435679ca45199379867d1ec28f3bdfdeb1c8
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Finish the TODOs in the journal apply code
+
+M	metadata/metatree.c
+
+commit b51d263264abde22d038936cd443b6c8c7c04ac6
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Add some required MetaBuilder functions
+
+    meta_builder_remove removes paths (recursively)
+    meta_builder_copy copies paths (recursively)
+    metafile_set_mtime sets mtime
+
+M	metadata/metabuilder.c
+M	metadata/metabuilder.h
+
+commit 967734f6c2f96be84e1cfcabb7c35b7ca5478ce6
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Add stringv reading support to MetaTree
+
+M	metadata/metatree.c
+
+commit 1ca409e4431e7bbc323af4fd5daf68d22133b351
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Add metafile_key_list_set to clear and set a key as a list
+
+M	metadata/metabuilder.c
+M	metadata/metabuilder.h
+
+commit b24304be071da894c0e6e30e3efbeaa16202357d
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Add string list support to treebuilder.c
+
+M	metadata/metabuilder.c
+
+commit aa9ddac43dde6b17bec09a5490d698960290101c
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Add metafile_key_unset
+
+M	metadata/metabuilder.c
+M	metadata/metabuilder.h
+
+commit 29311f8169487f9549945157fe056e789c30e9a2
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Implement metadata journal rollover
+
+M	metadata/metatree.c
+
+commit 63d43af73738e1f2622b8c52c75727d90bbd9ba2
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-21
+
+    Add getter for filename
+
+M	metadata/metatree.c
+M	metadata/metatree.h
+
+commit 2a1d36f0eb0dd0009a95bbf0583628e4ec2250e3
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-21
+
+    Make MetaTree threadsafe
+
+M	metadata/metatree.c
+M	metadata/metatree.h
+
+commit 81332679aad651f6319913ebf39253aecb2f8403
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-20
+
+    Handle looking up MetaTree for /
+
+    The assert failed because / is special cased in expand_parents,
+    special case it in find_mountpoint_for too.
+
+M	metadata/metatree.c
+
+commit 8c539a40fd2d758c29125b02e2dd260b10e9067f
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-18
+
+    Cache extra_prefix calculation too
+
+M	metadata/metatree.c
+
+commit 4e0d8b97655f7c78b7da642351bc919f1f5b2f5c
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-18
+
+    Create directory and empty tree when opening nonexistant tree
+    for write
+
+M	metadata/metatree.c
+
+commit dfa3f13abb7d34aa62e2c817b1ddabb448b969f9
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-18
+
+    Add metabuilder_free
+
+M	metadata/metabuilder.c
+M	metadata/metabuilder.h
+
+commit 9a185243a13620b860ba1ed3601a16a6d2f7c3a1
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Add MetaTree lookup by name
+
+M	metadata/metatree.c
+M	metadata/metatree.h
+
+commit 66fb95bc205528a4ed3e0238e4b826027bd33a66
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-18
+
+    Add refcounting for MetaTree
+
+M	metadata/metatree.c
+M	metadata/metatree.h
+
+commit 40955d7bc0102e4193b9eca6b509903f56f17351
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-18
+
+    Clean up mountpoint lookup code
+
+M	metadata/metatree.c
+
+commit 8843c54fd8402721d743a255b20d86a55ff3018c
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Initial work on libudev based tree lookup
+
+M	configure.ac
+M	metadata/Makefile.am
+M	metadata/metatree.c
+M	metadata/metatree.h
+
+commit 74ea19992c60e0bd2e9f1a9e925b349909f1bdd8
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-18
+
+    Cache mountinfo lookups
+
+M	metadata/metatree.c
+
+commit 7e9a03103145fbfdbab2d29767321f5362d7ac31
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-17
+
+    Add mountinfo parsing code
+
+M	metadata/metatree.c
+
+commit 2e7bd465331d73e575f845768815582fde143262
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-17
+
+    Add MetaLookupCache and initial work on meta_lookup_cache_lookup
+
+M	metadata/metatree.c
+M	metadata/metatree.h
+
+commit c97601731a5dbc9d34e8c4c208e993a3723deec5
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-22
+
+    Initial code for metadata store
+
+    This adds a mmap based metadata store for NFS-safe highly
+    efficient desktop-wide metadata lookup and store.
+
+M	Makefile.am
+M	configure.ac
+A	metadata/.gitignore
+A	metadata/Makefile.am
+A	metadata/crc32.c
+A	metadata/crc32.h
+A	metadata/file-format.txt
+A	metadata/metabuilder.c
+A	metadata/metabuilder.h
+A	metadata/metadata-nautilus.c
+A	metadata/metatree.c
+A	metadata/metatree.h
+
+commit a8d6c3db07ad5d9dc75b94eb95492b03bc20e788
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-23
+
+    Add gvfs-set-attribute program
+
+M	programs/.gitignore
+M	programs/Makefile.am
+A	programs/gvfs-set-attribute.c
+
+commit 4974ee6f62fa8905f70460f45f09e3784770e717
+Author: Jorge Gonzalez <jorgegonz@svn.gnome.org>
+Date:	2009-06-21
+
+    Updated Spanish translation
+
+M	po/es.po
+
+commit d0e7de96180991cfb96f88bb15ff59bebecb45fb
+Author: Claude Paroz <claude@2xlibre.net>
+Date:	2009-06-18
+
+    Fix volume prefixes in French (Bug #586280)
+
+M	po/fr.po
+
+commit 4053577a19585c63e23e6c6e85011e2df9910745
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-17
+
+    Bug 585591 – Starting/stopping drives
+
+    This is the GVfs implementation for the new GIO API for
+    starting/stopping drives. See
+
+    http://bugzilla.gnome.org/show_bug.cgi?id=585591
+
+    for details.
+
+M	client/gdaemonfile.c
+M	client/gvfsdaemondbus.c
+M	common/gmountoperationdbus.c
+M	common/gmountsource.c
+M	common/gvfsdaemonprotocol.h
+M	daemon/Makefile.am
+M	daemon/gvfsbackend.c
+M	daemon/gvfsbackend.h
+M	daemon/gvfsbackendcomputer.c
+A	daemon/gvfsjobstartmountable.c
+A	daemon/gvfsjobstartmountable.h
+A	daemon/gvfsjobstopmountable.c
+A	daemon/gvfsjobstopmountable.h
+M	monitor/gdu/ggdudrive.c
+M	monitor/gdu/ggduvolumemonitor.c
+M	monitor/proxy/gproxydrive.c
+M	monitor/proxy/gproxydrive.h
+M	monitor/proxy/gproxyvolume.c
+M	monitor/proxy/gproxyvolumemonitor.c
+M	monitor/proxy/gproxyvolumemonitor.h
+M	monitor/proxy/gvfsproxyvolumemonitordaemon.c
+M	programs/gvfs-mount.c
+
+commit 8a72222d454bdf12e88402b2f012667e7c8e9754
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-17
+
+    [PROGRAMS] add a -n option to gvfs-ls for nofollow-symlinks
+
+M	programs/gvfs-ls.c
+
+commit 056cfe684e3db4f83c176bb723c264ecfe60837f
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-17
+
+    [FTP] remove EPSV as default feature
+
+    now that we try EPSV anyway, we can omit assuming it exists and
+    try PASV
+    first.
+
+M	daemon/gvfsbackendftp.h
+
+commit acb3f8029d9f9a7054e3f138fd978e24233573a3
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-17
+
+    [FTP] use the EPRT feature response for EPRT support, not EPSV
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsbackendftp.h
+M	daemon/gvfsftptask.c
+
+commit c6405c6653c27b247f1fbb59c01b95938fb6b2d8
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-16
+
+    Better handling of PC floppy drives
+
+    PC Floppy Drives are handled in a special way since we don't poll for
+    media (it would make a lot of noise). Specifically we never probe for
+    the filesystem type. So if encountering a PC Floppy Drive, just always
+    show all volumes from it. Since we already have working support for
+    g_drive_poll_for_media() in Nautilus, things Just Work(tm)
+
+    http://people.freedesktop.org/~david/dkd-gnome-floppy-welcome-to-the-1980s.png
+
+    E.g. you can use the "Rescan" menu option to force media detection.
+
+    Welcome to the 1980s.
+
+M	monitor/gdu/ggdudrive.c
+M	monitor/gdu/ggduvolume.c
+M	monitor/gdu/ggduvolumemonitor.c
+M	monitor/gdu/ggduvolumemonitor.h
+
+commit 5d3ab40b5b0a574f207e7177d2f4c3bd329458a4
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-16
+
+    Bug 582772 – gvfsd-computer crashes with SEGSEV in recompute_files
+
+    Never use blank/empty drive names.
+
+M	monitor/gdu/ggdudrive.c
+
+commit 19a6bf345fdb8d445e4c3683e4ca0af0a0031f0b
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-16
+
+    [FTP] add EPRT support
+
+    The code does not support some corner cases that are listed in the RFC
+    (see inline comments), but I suspect those will never be hit. We
+    can add
+    those when they are hit.
+
+M	daemon/gvfsftptask.c
+
+commit 81fb75b2dc11a969d890f58bc3255ceae3f7bfde
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-16
+
+    [FTP] add the error code for EPRT's 522 error
+
+M	daemon/gvfsftptask.c
+
+commit 3431510c410c4c97c372ac797c0507d1c7eb69bf
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-15
+
+    Bug 585853 – video file previews
+
+    Also set preview::icon for video files.
+
+M	daemon/gvfsbackendgphoto2.c
+
+commit 2839922c259b848d7689d245a055c628754dc116
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-15
+
+    [FTP] Bug 516704 – Be able to connect to an Active FTP Site
+
+    Add initial support for the PORT command. Support for EPRT and a
+    non-ugly API are still missing.
+
+M	daemon/gvfsftpconnection.c
+M	daemon/gvfsftpconnection.h
+M	daemon/gvfsftptask.c
+M	daemon/gvfsftptask.h
+
+commit 7f2ac23d150aa779310a37534fc8564bbfc93b86
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-15
+
+    [FTP] prepare the code for active FTP support
+
+    adds a bunch of new APIs necessary for supporting active FTP. These
+    APIs
+    don't do anything yet, as active FTP is still unsupported, it's just
+    refactoring of code.
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsftpdircache.c
+M	daemon/gvfsftptask.c
+M	daemon/gvfsftptask.h
+
+commit 53f29945c6f8473324ea354fb38db8d90f2fe8cc
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-15
+
+    Post release version bump
+
+M	configure.ac
+
+commit 256bf8c6928f2accfdc1a767806ff94b4d2892f0
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-06-15
+
+    Update NEWS for release
+
+M	NEWS
+
+commit eb47de12f37e6c026881e94ed44db30dc767d9cc
+Author: Daniel Nylander <po@danielnylander.se>
+Date:	2009-06-13
+
+    Updated sv translation (Daniel Nylander)
+
+M	po/sv.po
+
+commit 58adb82001be26c72ff216506fc87fcf1c3ed7a0
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-12
+
+    Bug 583494 – Audio CD isn't automounting when inserted
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit e93df0133f5c6068a0d319cdbc2d9068fa21b02f
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-12
+
+    Make gvfs-mount print should_automount for GVolume objects
+
+M	programs/gvfs-mount.c
+
+commit b18516a92cb5306b6f73de83e74a9af7ddd781c0
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-12
+
+    [FTP] rework data connection code
+
+    The new code doesn't rely on funny workaround flags anymore and also
+    doesn't set workaround flags unconditionally after any failure.
+    It now works like this:
+    1) if a default method exists, try the default method.
+    2) if the default method failed, try all methods in order until
+    one succeeds.
+    3) if any method succeeded, make it the new default method.
+    This way, we take the proper method by default, and have a proper
+    fallback mechanism for flaky connections/servers that sometimes
+    fail to
+    connect properly.
+
+    Also, it's much easier to add new methods (like active FTP) later.
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsbackendftp.h
+M	daemon/gvfsftptask.c
+
+commit 1ef4f0d82da583c97c93052b6e4ccc632351746d
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-12
+
+    [FTP] indentation fixes
+
+M	daemon/gvfsbackendftp.h
+
+commit 3175d847032e3105c4ade67ba0ab032c859b2b2c
+Author: Ivar Smolin <okul@linux.ee>
+Date:	2009-06-12
+
+    Updating Estonian translation
+
+M	po/et.po
+
+commit 883ebd74c283d873cb383709d50e1b4faf60e0f1
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-11
+
+    [FTP] get rid of connection read/write functions
+
+    use get_data_stream() instead and call read/write on that manually.
+    Reduces the number of API.
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsftpconnection.c
+M	daemon/gvfsftpconnection.h
+
+commit b07c3a9b238f03b203c09adbb764e88b585cfdc6
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-11
+
+    [FTP] simplify debug id API
+
+    Add a separate function for requesting the debug id
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsftpconnection.c
+M	daemon/gvfsftpconnection.h
+M	daemon/gvfsftpdircache.c
+
+commit 1f97543c162244e85b08de190a38f92b4338312b
+Author: Jorge Gonzalez <jorgegonz@svn.gnome.org>
+Date:	2009-06-11
+
+    Updated Spanish translation
+
+M	po/es.po
+
+commit a1fdb3ff05aa8731d82f82f8bb508c533dd6049e
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-11
+
+    [FTP] improve error handling for opening files
+
+    permission handler now sets EPERM when file exists and ENOENT when it
+    doesn't.
+
+M	daemon/gvfsbackendftp.c
+
+commit b6637656b002baed39647d6b7c66d79d6bae4ed5
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-11
+
+    [FTP] close data connection before invoking error handlers
+
+    Some ftp commands like RETR require an open data connection, but
+    if they
+    fail, we want to invoke error handlers. To allow those handlers
+    to open
+    data connections themselves, we close any potentially open ones beofre
+    invoking them.
+
+M	daemon/gvfsftptask.c
+
+commit 61fcfbd9fb9e7505f9917cc2db5665b46a90e005
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-11
+
+    [FTP] Bug 522208 - display not available error when ...
+
+    Try to return EPERM when there's a permission problem instead of
+    returning the default error code "Operation failed".
+
+M	daemon/gvfsbackendftp.c
+
+commit 36bd5e3846effed5fe8252ece85c93f00c3a0761
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-11
+
+    [FTP] use directory cache for error handling
+
+    Fix FIXME that complained about not having access to the cache from
+    error handlers.
+    Now that we have access, we can use it to check if a file exists
+    and/or
+    is a directory instead of issuing some commands manually.
+
+M	daemon/gvfsbackendftp.c
+
+commit f9940f8318eb0835fb793557dbd914b856cbabf9
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-09
+
+    [FTP] rework handling of uncached files
+
+    The directory cache needs a callback to lookup uncachable files.
+    Uncachaable files are files that can be accessed but where the parent
+    directory cannot be listed.
+    This has to go into the directory cache, as the directory cache
+    performs
+    symlink resolving and looking up symlinks may encounter such files.
+
+    Fixes a testcase in Andreas' test collection.
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsftpdircache.c
+M	daemon/gvfsftpdircache.h
+
+commit 9d7a1de3017e240b0af23d2a51237d75fb14ae09
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-09
+
+    [FTP] reuse cancellable instead of creating a new one
+
+    Now that a corner case in glib was fixed, it's possible to use
+    g_cancellable_reset() and reuse the cancellable after timeouts instead
+    of creating a new one.
+
+    If you want to avoid random hangs and g_critical()s when transferring
+    files, you need glib commit ced88fd0de4aedb537552561582875b427081eeb
+    I've update the glib requirements accordingly.
+
+M	configure.ac
+M	daemon/gvfsbackendftp.c
+
+commit 1b49b7c775bfadbea13651c7406e8b12dfb42ad1
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-08
+
+    [FTP] fix EISDIR function
+
+    I'm not sure why the function claimed 550 answers to CWD commands
+    would
+    indicate that the path is a directory, but /dev/null certainly is
+    not a
+    directory.
+
+M	daemon/gvfsbackendftp.c
+
+commit e3288d2f30f592695f3df30b60f21d37f5a64e8a
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-08
+
+    [FTP] make the pull callback emit progress callbacks
+
+    The progress callbacks are throttled to at most once per second to not
+    overload dbus for very fast connections. This is implemented somewhat
+    ugly using a cancellable that interrupts once per second to ensure
+    progress updates are sent.
+    If someone knows a saner approach, please tell me (or better:
+    provide a
+    patch).
+
+M	daemon/gvfsbackendftp.c
+
+commit 47e7ba99968d2ee481782e6fe61fb3ccb0eb8606
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-08
+
+    [FTP] almost implement pull vfunc
+
+    Progress updates are not sent yet.
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsbackendftp.h
+
+commit dd02f8de178ce85d09b3fc1ed31626fb19dfcb44
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-05
+
+    [FTP] use an empty username if none was given
+
+    fixes an assertion
+
+M	daemon/gvfsbackendftp.c
+
+commit d94f06322c52eaed1d7732419c6120556613f3d6
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-05
+
+    [FTP] handle error cases when opening/closing data connection
+
+    There were a few conditions that were checked using return_if_fail()
+    that were valid.
+
+M	daemon/gvfsftptask.c
+M	daemon/gvfsftptask.h
+
+commit 4cebb73a48341b3695bc34750eab7290dc44b629
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-05
+
+    [FTP] keep list of busy connections
+
+    A busy connection is a connection that is currently used as a
+    handle for
+    a file transfer (upload or download). If all connections are busy, we
+    can just return EBUSY instead of waiting for 30 seconds for a
+    connection
+    to become available.
+
+    This is mostly useful for performance when there is a maximum of 1
+    connection to the server and this connection is busy transferring a
+    file. Even gio functions like g_file_copy() sometimes do additional
+    operations while transferring files. (It does a query_info for the
+    progress callback.)
+
+M	daemon/gvfsbackendftp.h
+M	daemon/gvfsftptask.c
+
+commit 7428ea86b4c1f04ca6530d8eff4ca60cc8894f7e
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-05
+
+    [FTP] don't free nonexisting entry
+
+M	daemon/gvfsftpdircache.c
+
+commit 8207ca57b8d0bb24ca29d1bae696a892f7962295
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-05
+
+    [FTP] compute the ftp path for the ftp_path variable
+
+M	daemon/gvfsftpfile.c
+
+commit b4e9f6a3241f072f6275a0a50b6909b8d1a6474b
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-04
+
+    [FTP] whitespace changes
+
+    - replace tabs with 8 spaces
+    - remove spaces at end of line
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsbackendftp.h
+M	daemon/gvfsftpconnection.c
+M	daemon/gvfsftpconnection.h
+M	daemon/gvfsftpdircache.c
+M	daemon/gvfsftpdircache.h
+M	daemon/gvfsftpfile.c
+M	daemon/gvfsftpfile.h
+M	daemon/gvfsftptask.c
+M	daemon/gvfsftptask.h
+
+commit 099ec12159453b224957f36bef4271bfd9c326b3
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-04
+
+    [FTP] improve debugging
+
+    - print LIST replies again
+    - make connections have a debug id and use it for debugging prints
+
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsftpconnection.c
+M	daemon/gvfsftpconnection.h
+M	daemon/gvfsftpdircache.c
+M	daemon/gvfsftpdircache.h
+M	daemon/gvfsftptask.c
+
+commit 5bca61ba06c374b5d4ef197e4805074880ddee20
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-04
+
+    [FTP] rework cache handling
+
+    The cache handling has been split into a separate file and structure
+    now. While the API still isn't perfect, it's much clearer than before.
+    It's also faster when looking up lots of symlinks.
+
+M	daemon/Makefile.am
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsbackendftp.h
+M	daemon/gvfsftpconnection.c
+M	daemon/gvfsftpconnection.h
+A	daemon/gvfsftpdircache.c
+A	daemon/gvfsftpdircache.h
+M	daemon/gvfsftpfile.c
+M	daemon/gvfsftpfile.h
+
+commit 5e3ce10bd814834731ac70e584a90b64ab2860fe
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-04
+
+    [FTP] do not add double slashes when constructing relative to root
+
+M	daemon/gvfsftpfile.c
+
+commit 06e0e082a174b9fd4405af93ca66e8bfc9b888b9
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-04
+
+    [FTP] properly reduce connection count when freeing connection
+
+M	daemon/gvfsftptask.c
+
+commit e62142b001e218d268a85f2f90993cdf42148fae
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-02
+
+    [FTP] introduce GVfsFtpTask
+
+    split out the old FtpConnection struct into a separate GVfsFtpTask
+    structure that acts as a one-stop solution to vfuncs. It keeps
+    track of
+    all important structures:
+    - the backend
+    - the current job
+    - the potential connection to the server
+    - the error state
+    during the lifetime of a backend vfunc and supplies convenience
+    functions to ease implementing these vfuncs. The API of gvfsftptask.h
+    is
+    documented.
+
+M	daemon/Makefile.am
+M	daemon/gvfsbackendftp.c
+M	daemon/gvfsbackendftp.h
+M	daemon/gvfsftpconnection.c
+M	daemon/gvfsftpconnection.h
+A	daemon/gvfsftptask.c
+A	daemon/gvfsftptask.h
+
+commit 2f5c4dcfd579f9b9cceb8eb08b71d4318e9c03b6
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-03
+
+    [FTP] split out file code
+
+    Next step in cleaning up the ftp backend: Split out FtpFile, which is
+    used for the proper translation between FTP paths and gvfs paths.
+
+M	daemon/Makefile.am
+M	daemon/gvfsbackendftp.c
+A	daemon/gvfsftpfile.c
+A	daemon/gvfsftpfile.h
+
+commit 9bc35b2b30b3f43ae7385b078c0b2fdfbdd30b1e
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-05-28
+
+    [FTP] split out connection code
+
+    the current FtpConnection object is not flexible enough. It is
+    doing too
+    many things at once, namely:
+    1) handling a physical connection to the ftp server
+    2) handling a GVfsJob's lifetime
+    Also, the file gvfsbackendftp.c is too big, counting >2000 lines.
+
+    This is the first step in an attempt to separate these two things. It
+    splits out the physical connection into different files and makes the
+    old FtpConnection code use this instead.
+    A side effect of this is that it includes a change so that reading
+    lines
+    is now done with a GDataInputStream instead of manually, as
+    suggested by
+    Alex.
+
+M	daemon/Makefile.am
+M	daemon/gvfsbackendftp.c
+A	daemon/gvfsftpconnection.c
+A	daemon/gvfsftpconnection.h
+
+commit fd13a19ac747c5f79b32e47724e0ee1cfa36a58f
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-10
+
+    [TRASH] pass cancellables to GFile operations
+
+    No operations in the trash backend passed the job's cancellable
+    on. This
+    patch fixes this.
+    It also passes on the progress callback in trash_backend_pull
+
+M	daemon/gvfsbackendtrash.c
+
+commit df5339b873f1f1e9dd1c1d9fe113a16b52808213
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-10
+
+    signal the need for updates (changes wire protocol and internal API)
+
+    Send a boolean send_progress to the daemon in the case of push/pull
+    jobs
+    that indicates if progress updates should be sent to the client.
+    Oftentimes the daemons can avoid quite a bit of work (like querying
+    file
+    sizes or setting up and operating machinery required to send progress
+    updates) when it's not required.
+
+    Patch also includes fixes to daemons to ensure they don't call a NULL
+    progress_callback (previously, NULL was not a possible value).
+
+M	client/gdaemonfile.c
+M	daemon/gvfsbackendobexftp.c
+M	daemon/gvfsjobpull.c
+M	daemon/gvfsjobpull.h
+M	daemon/gvfsjobpush.c
+M	daemon/gvfsjobpush.h
+
+commit 060d792d9a47009e33ee01aac0706893deb80e9b
+Author: Kjartan Maraas <kmaraas@gnome.org>
+Date:	2009-06-10
+
+    Updated Norwegian bokmål translation.
+
+M	po/nb.po
+
+commit 27b14622b7fcc228ddd617ebd723751ccd8dadaa
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-08
+
+    gdu: Use DriveDetach() method to power down hard disk enclosures
+
+    See this commit
+
+    http://cgit.freedesktop.org/DeviceKit/DeviceKit-disks/commit/?id=5b7350df8b63cf4178a2fe69ee740b5222130421
+
+    for details about DriveDetach(). In a nutshell it allows us to offer
+    an Eject() option on USB enclosures. Currently we don't do this since
+    such devices don't have removable media.
+
+    With this change, we'll set can_eject to TRUE if the device is
+    detachable. If the device is both detachable and removable, we prefer
+    Eject over Detach() when doing the deed (e.g. consider a USB optical
+    drive; it is both detachable and removable).
+
+    To sum up, the net result of this change is that users of Nautilus
+    will get an Eject option and the eject icon in Nautilus' sidebar. Upon
+    the user pressing Eject in the UI we'll unmount all partitions as
+    usual. Then if the device is not removable, we'll invoke
+    DriveDetach(). That will make DeviceKit-disks send these two SCSI
+    commands
+
+     SYNCHRONIZE CACHE
+     STOP
+
+    and then we'll unbind e.g. the usb-storage driver from the USB
+    interface of the USB device. The net result is that the device appears
+    to be disconnected (ie. we get remove uevents for e.g. /dev/sdb[0..N]
+    and /dev/sdb) and also that the device powers down.
+
+    Right now DeviceKit-disks only supports DriveDetach() for USB devices
+    but should it gain support for doing the same thing for Firewire,
+    eSATA, whatever then we'll get that support for free too.
+
+M	monitor/gdu/ggdudrive.c
+
+commit c16e50b7d91438f6ba5e13d18c5ae90bcdd4a51c
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-06-08
+
+    show speed in progress updates of gvfs-copy
+
+M	programs/gvfs-copy.c
+
+commit c371751552a7ed6ecfd76077e8ec080a61fe6f9b
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-05
+
+    gphoto2: Disable debug spew
+
+    This errornously got introduced as part of the last commit.
+
+M	daemon/gvfsbackendgphoto2.c
+
+commit 7cffd6b46384f0290e641784f8c5ecb7946bcff2
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-05
+
+    gphoto2: Fix gphoto2 backend to work with Canon EOS 5D
+
+    This bug was introduced during the 2.25 cycle as part of supporting
+    multiple storage heads. Previously we didn't use basedir, now we
+    do. And we failed to check if the basedir is actually set.
+
+M	daemon/gvfsbackendgphoto2.c
+M	monitor/gphoto2/ggphoto2volumemonitor.c
+
+commit 3b64f78030aff331552f420d2e85f1d143edd10b
+Author: Erdal Ronahi <erdal.ronahi@gmail.com>
+Date:	2009-06-05
+
+    Updated Kurdish translation
+
+M	po/ku.po
+
+commit e646c3d703e74a3cbef5cc7a7a4330a483718d73
+Author: Christian Persch <chpe@gnome.org>
+Date:	2009-06-04
+
+    Correct "srdcir" typo to "srcdir"
+
+M	Makefile.am
+
+commit ee581405d10eb9ee9b516717e1b2e5bfefee9ab0
+Author: Mattias Põldaru <mahfiaz gmail com>
+Date:	2009-06-04
+
+    Updating Estonian translation
+
+M	po/et.po
+
+commit 384b3a679e3cf5138ada51338d613df517e0658a
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-06-02
+
+    Bug 583704 – undefined reference to
+    `gdu_error_check_polkit_not_authorized'
+
+    With the new polkit 1.0 version that gnome-disk-utility is now using,
+    authorizations are obtained out-of-band. So we don't need to handle it
+    here.
+
+M	monitor/gdu/Makefile.am
+M	monitor/gdu/ggduvolume.c
+D	monitor/gdu/polkit.c
+D	monitor/gdu/polkit.h
+
+commit 586a4e0a2ca6d3c021e8eaf509fb689e0d398082
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-05-26
+
+    [FTP] clarify code
+
+    Don't use:
+      if (error)
+	/* error handling */
+      else
+	/* normal code */;
+      return;
+
+    Instead use:
+      if (error) {
+	/* error handling */
+	return;
+      }
+      /* normal code */
+      return;
+
+    This avoids lots of indentation for normal code and clarifies what the
+    default flow of the code is.
+
+M	daemon/gvfsbackendftp.c
+
+commit 0891475dd5cd3b6ff639d720f9e4f9d266874eea
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-05-26
+
+    [FTP] ensure the same remote address is used for all connections
+
+    Save the address of the current connection, so that for future
+    connections, we are sure to connect to the same machine.
+    The idea here is to avoid using mirrors that have a different state,
+    which might cause Heisenbugs.
+
+M	daemon/gvfsbackendftp.c
+
+commit 9047c1b587218bcc366b48fa5386b45ce120f53f
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-05-25
+
+    [FTP] make ftp backend use gnio instead of libsoup
+
+    This removes all traces of libsoup and uses gnio replacement functions
+    instead. Note that various things have subtle differences, so
+    expect new
+    bugs.
+
+M	daemon/Makefile.am
+M	daemon/gvfsbackendftp.c
+
+commit f5b86958b0706ee3a290cede78483d66607ed212
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-05-25
+
+    require gnio for ftp backend
+
+M	configure.ac
+
+commit 8b1f581fbf7eed686d20cd729cd6620a0eabec01
+Author: Jorge Gonzalez <jorgegonz@svn.gnome.org>
+Date:	2009-05-26
+
+    Updated Spanish translation
+
+M	po/es.po
+
+commit 7a86c013a21741d61154969872bf8e1cfd1165e6
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-05-26
+
+    [FTP] rework creating the root file info
+
+    There is no need to make the root file info backend specific, as
+    it just
+    returns a bunch of default values anyway. Also, we want to use
+    the host
+    display name in there.
+
+M	daemon/gvfsbackendftp.c
+
+commit 4b9af0f85c49d243febddff1f2bdf2409bed9cec
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-05-26
+
+    [FTP] keep the host's display name around
+
+    Previously we used soup_address_get_name() to query the host name on
+    demand, but this will not be possible with gnio.
+
+M	daemon/gvfsbackendftp.c
+
+commit 11c321f41cb0b5fa3bab8ec1eb93c20c1b79a6d0
+Author: Christian Kellner <gicmo@gnome.org>
+Date:	2009-05-26
+
+    [dav] Ensure we have a valid username (#582373)
+
+    If g_mount_source_ask_password didn't fill in a new username fall
+    back to the one we pre-filled it with.
+    Patch by Frederic Peters <fpeters@0d.be>
+
+M	daemon/gvfsbackenddav.c
+
+commit c8e37497c132722a6d99a8c9511a90e90bcf3da9
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-05-26
+
+    [FTP] rework directory listing
+
+    This is in preparation to both making directory listing caches simpler
+    and to prepare for a gnio switch.
+
+    The code gets rid of reading the directory listing line by line and
+    instead reads it as one big chunk and splits it into lines upon
+    parsing.
+
+M	daemon/gvfsbackendftp.c
+
+commit dfc299b02ae45c6f651bf532e88b56bbcc554ab1
+Author: Christian Kellner <gicmo@gnome.org>
+Date:	2009-05-26
+
+    Require glib 2.20.1
+
+    Due to the use of g_cancellable_connect/disconnect we need
+    glib 2.20.1.
+
+M	configure.ac
+
+commit f2ba1297f17dbbd7dd72e031f347adb0de045fb8
+Author: Pavol Šimo <palo.simo@gmail.com>
+Date:	2009-05-20
+
+    Updated Slovak translation
+
+M	po/sk.po
+
+commit 5bebce4592fee584bbc6db29a3e62b4005a1a71f
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-05-15
+
+    Use new race-free cancellable signal connect APIs (#572844)
+
+M	client/gdaemonfileenumerator.c
+M	common/gdbusutils.c
+M	daemon/gvfsbackendftp.c
+
+commit 87741642cd920ef4e48d09755be1cc6db6a0774b
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-05-13
+
+    [ftp] This data connection close isn't needed
+
+    While it oesn't hurt either, I'm removing it because it violates the
+    rule that data connections should be closed before receiving the reply
+    indicating the transfer is done on the command connection.
+
+M	daemon/gvfsbackendftp.c
+
+commit 5073d2736d6a83de04e749ae5952071da3d1ccbc
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-05-12
+
+    CDDA: allow query well-formed filenames only
+
+    This will check for ".wav" suffix as long as sscanf()
+    doesn't care of the rest of the formatting string after
+    last placeholder. Querying filenames like
+    "Track 10.nonsense" will now throw an error.
+
+    Partially fixes https://bugzilla.redhat.com/show_bug.cgi?id=499266
+
+M	daemon/gvfsbackendcdda.c
+
+commit edb7ccb661746fd55ed3b935b44a61d011a0807c
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-05-12
+
+    Ref the infos in next_files_finish (#582195)
+
+    In later glib versions setting the GSimpleAsyncResult gpointer data
+    frees the old data using the destroy notify, which can cause crashes
+    since we return it. So, just copy+ref the list instead of trying
+    to steal
+    the asyncresult one.
+
+M	client/gdaemonfileenumerator.c
+
+commit d0a339d10b789c53352b61b291eb55d67f770254
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-05-08
+
+    Emit the new pre-unmount signal on GMounts (#576105)
+
+M	monitor/proxy/gproxyshadowmount.c
+M	monitor/proxy/gproxyvolumemonitor.c
+
+commit e4cca36cab78b1951db5e7aa7f590599a5d5c290
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-05-07
+
+    FTP: parse file sizes > 4GB correctly
+
+    Use 64-bit strtoull() instead of 32-bit strtoul()
+    when converting string to number.
+
+    https://bugzilla.redhat.com/show_bug.cgi?id=499286
+
+M	daemon/gvfsbackendftp.c
+
+commit 59dd3b33a71a930651f23142e2a7d7e57727144f
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-05-01
+
+    Fix bug where drives are not ignored as they ought to be
+
+    This should fix part of
+
+     https://bugzilla.redhat.com/show_bug.cgi?id=498649#c14
+
+    (the other part is fixed in the Fedora livecd scripts)
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit 3f3f21fe6e2bdac8fd6acf048da6fb228adde092
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-05-01
+
+    Use new gnome-disk-utility API to figure out when media was inserted
+
+    This fixes a problem with Nautilus automounting newly created volumes
+    appearing as a result of formatting/partitioning.
+
+M	monitor/gdu/ggdudrive.c
+
+commit 8488ee446cf2ddb1380065bc0f983dc60682f7fc
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-15
+
+    Pass the 'flush' mount option for vfat
+
+    This mount option makes the vfat filesystem driver flush data more
+    often. As a consequence
+
+     1. users never get to see the gnome-disk-utility notification daemon
+	dialog just added
+
+	 http://people.freedesktop.org/~david/gdu-unmount-busy-1.png
+
+	but that's useful for other filesystems as well.
+
+     2. The Nautilus copy dialog stays up until things are on the disk
+
+    We do this in gvfs rather than DeviceKit-disks because in some
+    scenarios 'flush' may be unwanted and there is currently no way to
+    turn it off (e.g. no 'noflush' or 'flush=0' option).
+
+    Ideally the kernel would get this kind of thing right by itself.
+
+M	monitor/gdu/ggduvolume.c
+
+commit 1ba5521dc86d7be59fc809bb7c118275fad8e4c8
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-15
+
+    Use new gnome-disk-utility API to hide unwanted devices
+
+    This is to resolve bugs like
+
+     https://bugzilla.redhat.com/show_bug.cgi?id=495170
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit 4a58fb55b55ad2608121059c86bd338d3db20233
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-13
+
+    Bug 576083 – pre-unmount signals not being triggered
+
+    Basically emit GVolumeMonitor::mount-pre-unmount on the volume monitor
+    and retry unmount operation a couple of times.
+
+M	monitor/gdu/ggdumount.c
+
+commit 3c1f25749807eeede01068b885b0b618251a225a
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-13
+
+    Show user-mountable fstab entries
+
+    Show all entries from /etc/fstab for which
+
+     - the entry is user mountable
+     - the mount point is in /media or $HOME
+     - if it's a /dev file make sure it exists and is not handled
+       by DeviceKit-disks already
+
+    For example this /etc/fstab entry
+
+     "quad.local:/media/FusionMedia /media/FusionMedia nfs defaults,users
+     0 0"
+
+    makes Nautilus display this when unmounted
+
+     http://people.freedesktop.org/~david/gvfs-user-mountable-fstab-entries.png
+
+    and these GVolume and GMount objects to appear when mounted
+
+     Volume(0): FusionMedia
+       Type: GProxyVolume (GProxyVolumeMonitorGdu)
+       themed icons:  [folder-remote]  [folder]
+       can_mount=1
+       can_eject=0
+       Mount(0): FusionMedia -> file:///media/FusionMedia
+	 Type: GProxyMount (GProxyVolumeMonitorGdu)
+	 themed icons:	[folder-remote]  [folder]
+	 can_unmount=1
+	 can_eject=0
+	 is_shadowed=0
+
+    This should resolve http://bugzilla.gnome.org/show_bug.cgi?id=536292
+
+M	monitor/gdu/ggdumount.c
+M	monitor/gdu/ggduvolume.c
+M	monitor/gdu/ggduvolume.h
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit 6d96b756d39a924d1244388f20d93a0a96d06698
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-11
+
+    Never ignore drives without media
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit d51ca4c383628ff06fbd37a1a3622d394ddfc0d5
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-11
+
+    Ignore drives without volumes
+
+    This fixes a problem on some dmraid setups where we have drives
+    without any partitions (the dmraid boot scripts removes all partitions
+    (!)). See https://bugzilla.redhat.com/show_bug.cgi?id=495152 for more
+    details.
+
+    This fix is also consistent with the policy of ignoring drives where
+    all volumes are ignored. E.g. prior to this patch we didn't shown
+    neither sdb if sdb1 was a the only unrecognized partition on sdb.. so
+    if you delete sdb1, it would be natural to keep hiding sdb (which is
+    what this patch does).
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit b8f430b51f4071a7c7ba6601caf20f817fda531d
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-09
+
+    Bug 576587 – allow eject even on non-ejectable volumes
+
+    This fixes a host of problems with e.g. Kindle or iPod devices
+    requiring to be "ejected" to display messages such as
+
+     "If you want to use your Kindle and continue charging, please eject
+     your Kindle from your computer."
+
+    to the user.
+
+    Previously we relied on HAL fdi files or similar to tag that such
+    devices needed to be ejectable. Now we just set everything as
+    ejectable.
+
+    For this to really work well the Nautilus patch in
+
+     http://bugzilla.gnome.org/show_bug.cgi?id=574067
+
+    needs to be reverted.
+
+M	monitor/gdu/ggdudrive.c
+
+commit 39e79a8e40355cd235d56a8695c3b0deae5e76c7
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-09
+
+    Ignore drives if all volumes of the drive are ignored
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit 965a1d6ca3556e2c93a30f230f7529b7eee8c525
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-09
+
+    Don't add a volume if the device is mounted and ignored
+
+    This fixes a problem where e.g. /dev/sdb1 a) is not referenced in
+    /etc/fstab; and b) is mounted in an ignored location e.g. /mnt/live.
+
+    Specifically this bug affects the Fedora Live CD, see
+    https://bugzilla.redhat.com/show_bug.cgi?id=495033 for details.
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit 7d8e6aed725cae07f8e02a4fa6facac356008f8c
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-09
+
+    Remove debug spew
+
+M	monitor/gdu/ggduvolume.c
+
+commit f1806a6055af42213362d7d686e6844abf4bf027
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-09
+
+    Avoid automounting volumes on virtual and unknown buses
+
+    Basically we want to avoid automounting volumes from
+
+     1. drives on a 'virtual' or unset bus
+     2. volumes without a drive
+
+    This is to avoid interference with things like Fedora's livecd-tools
+    that use device-mapper to set up images. See
+
+     https://bugzilla.redhat.com/show_bug.cgi?id=494144 for more
+
+    background.
+
+    In the future we might want to relax 1. so automounting things like
+    Linux MD and LVM2 devices work.
+
+M	monitor/gdu/ggduvolume.c
+
+commit fff39a618cd0ce467e6629cee461784e404cca83
+Author: Tomas Bzatek <tbzatek@redhat.com>
+Date:	2009-04-09
+
+    Fix how we determine if a volume is ignored
+
+    This fixes a typo - wrong assignment of device file when testing
+    whether the
+    volume should be ignored or not. It led to empty GVolume list
+    associated to a
+    GDrive and thus inability to mount anything via computer://
+
+    Signed-off-by: David Zeuthen <davidz@redhat.com>
+
+M	monitor/gdu/ggduvolumemonitor.c
+
+commit 794ff41937d194287c12ea7b4dbb991a1ea38a41
+Author: David Zeuthen <davidz@redhat.com>
+Date:	2009-04-09
+
+    Bug 573826 – gdu volume monitor
+
+    Add the GNOME Disk Utility based volume monitor, see
+
+     http://bugzilla.gnome.org/show_bug.cgi?id=573826
+     http://mail.gnome.org/archives/gvfs-list/2009-March/msg00002.html
+
+    for details.
+
+M	configure.ac
+M	monitor/Makefile.am
+A	monitor/gdu/Makefile.am
+A	monitor/gdu/gdu-volume-monitor-daemon.c
+A	monitor/gdu/gdu.monitor
+A	monitor/gdu/ggdudrive.c
+A	monitor/gdu/ggdudrive.h
+A	monitor/gdu/ggdumount.c
+A	monitor/gdu/ggdumount.h
+A	monitor/gdu/ggduvolume.c
+A	monitor/gdu/ggduvolume.h
+A	monitor/gdu/ggduvolumemonitor.c
+A	monitor/gdu/ggduvolumemonitor.h
+A	monitor/gdu/org.gtk.Private.GduVolumeMonitor.service.in
+A	monitor/gdu/polkit.c
+A	monitor/gdu/polkit.h
+
+commit 37af452e511ac1698965da70ad4f48c72b2bb42e
+Author: Manoj Kumar Giri <mgiri@mgiri.csb>
+Date:	2009-04-30
+
+    Updated Oriya Translation.
+
+M	po/or.po
+
+commit 345e4b2d5849294286f6a740ae43f22fb8a09a79
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-04-26
+
+    split create_file_info() function
+
+    The previous function was looking ugly due to early returns.
+    This caused leaks and made it hard to read.
+
+M	daemon/gvfsbackendftp.c
+
+commit fa3fa7c8e30d680678c59d5fc60305090fc8661f
+Author: Andreas Henriksson <andreas@fatal.se>
+Date:	2009-04-26
+
+    ftp: try to find hidden file/dir even when there's nothing to
+    enumerate.
+
+    Don't bail out early, always try to find hidden files directories.
+    Fixes case when there's a symlink to a subdir of a
+    hidden directory which we can't enumerate. (#559142)
+
+M	daemon/gvfsbackendftp.c
+
+commit 22c55fb6df556517cac030fd4fafce46c9aa0342
+Author: Benjamin Otte <otte@gnome.org>
+Date:	2009-04-26
+
+    Bug 580125 – Logging in to a FTP server only works for the 2nd
+    attempt
+
+    Various fixes for sending the OPTS command:
+    1) only send it after we're sure we've read the FEAT response (which
+       moves it to after the login)
+    2) ignore potential errors from the OPTS command
+
+    Also fixes:
+    Bug 580124 – Copying from FTP crashes
+
+M	daemon/gvfsbackendftp.c
+
+commit e53be4e80e9194ad4917102e243cecec7bd2a665
+Author: Andreas Henriksson <andreas@fatal.se>
+Date:	2009-04-26
+
+    use FTP_FEATURES_DEFAULT macro
+
+    the previous code was spelling out the default feature instead
+
+M	daemon/gvfsbackendftp.c
+
+commit 255e56b873c9eebad72ddd5c0e38927ae05d1caa
+Author: Andreas Henriksson <andreas@fatal.se>
+Date:	2009-04-26
+
+    fix typo in comment
+
+M	daemon/gvfsbackendftp.c
+
+commit c580f3a886d6e4c94bbe12cd508ec78caf74df66
+Author: Jordi Mas i Hernandez <jmas@softcatala.org>
+Date:	2009-04-22
+
+    Minor fixes to Catalan translation
+
+M	po/ca.po
+
+commit a16dc3208f437d3176f10835dd5ac302189ec947
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-20
+
+    Bump master to 1.3.1 post branch
+
+    Further 1.2.x work happens on the gnome-2-26 branch
+
+M	configure.ac
+
+commit c14ba27f69736c8e1f88c7692c81d2473559438c
+Author: Funda Wang <fundawang@gmail.com>
+Date:	2009-04-17
+
+    Updated zh_CN translation.
+
+M	po/ChangeLog
+M	po/zh_CN.po
+
+commit 4e49395240190526efe8833c802ee49de8b3915f
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-17
+
+    Don't trust remote permissions mask fully
+
+    We don't actually know what gids we're in, and also there may be other
+    things not visible via sftp like ACLs that decide the user
+    permissions. So, we only use the permissions for group and other if
+    they result in a positive, otherwise we leave the attibute unset
+    (meaning "don't know").
+
+M	daemon/gvfsbackendsftp.c
+
+commit e6d9c864f508aebf8e6bb8d67c5978f8f077137d
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-17
+
+    Fix up .gitignore files
+
+    Update old ignore files and add new ones as needed
+
+M	.gitignore
+M	client/.gitignore
+M	daemon/.gitignore
+A	monitor/gphoto2/.gitignore
+A	monitor/hal/.gitignore
+M	po/.gitignore
+A	programs/.gitignore
+
+commit a8620dfb94955fd9e6678dc936b7f97d8610df00
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-17
+
+    Add rules to autogenerate ChangeLog
+
+M	Makefile.am
+
+commit cd9a1633a35b1243805c0e531a1f7bd75160a7d4
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-17
+
+    Mention micro commits in README.commits
+
+M	README.commits
+
+commit 6fa515051dc7f082896151545a41a29853f4a3bc
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-17
+
+    Add README.commits and dist it
+
+    Add file explaining how we want commits to look.
+    Also dist gvfs.doap and the ChangeLog.pre-1-2
+
+M	Makefile.am
+A	README.commits
+
+commit 8cd532cf7715a4791d8156a711ecb7344b27cb46
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-17
+
+    Move ChangeLog to ChangeLog.pre-1-2
+
+    We're not using manual ChangeLogs anymore.
+
+R099	ChangeLog	ChangeLog.pre-1-2
+
+commit ec63735ed67da8da1cb80994efed477179c1b8fc
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-17
+
+    Add gvfs.doap file
+
+    Add short description for cgit
+
+A	gvfs.doap
+
+commit 5acc130a5a08d54f5701d58309c9b53352859c2d
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-16
+
+    Add g_vfs_backend_is_mounted()
+
+    2009-04-16	Alexander Larsson  <alexl@redhat.com>
+
+	* daemon/gvfsbackend.[ch]:
+	Add g_vfs_backend_is_mounted()
+
+	* daemon/gvfsdaemon.c:
+	(g_vfs_daemon_re_register_job_sources):
+	Don't re-register backends that have not finished mounted
+	yet. (#578861)
+
+
+
+    svn path=/trunk/; revision=2378
+
+M	ChangeLog
+M	daemon/gvfsbackend.c
+M	daemon/gvfsbackend.h
+M	daemon/gvfsdaemon.c
+
+commit 62a573a22dc12f0f6d6afddc41d93059dc19a90e
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-16
+
+    Bug 578574 – always show drive names in computer://
+
+    2009-04-16	Alexander Larsson  <alexl@redhat.com>
+
+	Bug 578574 – always show drive names in computer://
+
+	* daemon/gvfsbackendcomputer.c:
+	(recompute_files):
+	If mount has a drive, use its name as part of the display name.
+	Patch from David Zeuthen
+
+
+
+    svn path=/trunk/; revision=2377
+
+M	ChangeLog
+M	daemon/gvfsbackendcomputer.c
+
+commit ced485ed5cf632e5f48f31546a4c731e8984729d
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-16
+
+    Bug 523420 – gvfs-bash-completion.sh has a shebang and is executable
+
+    2009-04-16	Alexander Larsson  <alexl@redhat.com>
+
+	Bug 523420 – gvfs-bash-completion.sh has a shebang and is
+	executable
+
+	* programs/Makefile.am:
+	Don't install gvfs-bash-completion.sh as executable
+
+	* programs/gvfs-bash-completion.sh:
+	Remove shebang
+
+
+
+    svn path=/trunk/; revision=2376
+
+M	ChangeLog
+M	programs/Makefile.am
+M	programs/gvfs-bash-completion.sh
+
+commit ba5f948aad464ceafabc3d2e3d4994ae6867f4da
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-13
+
+    Pick up SSH_AUTH_SOCK from gnome-keyring (#578708) Patch from
+    Stef Walter.
+
+    2009-04-13	Alexander Larsson  <alexl@redhat.com>
+
+	* daemon/gvfsbackendsftp.c:
+	Pick up SSH_AUTH_SOCK from gnome-keyring (#578708)
+	Patch from Stef Walter.
+
+
+    svn path=/trunk/; revision=2375
+
+M	ChangeLog
+M	daemon/gvfsbackendsftp.c
+
+commit 975d034c64814608d35bd191fad458d6866f81a9
+Author: Alexander Larsson <alexl@redhat.com>
+Date:	2009-04-13
+
+    Post release version bump
+
+    2009-04-13	Alexander Larsson  <alexl@redhat.com>
+
+	* configure.ac:
+	Post release version bump
+
+    === gvfs 1.2.2 ===
+
+     line, and those below, will be ignored--
+
+    M	 ChangeLog
+    M	 configure.ac
+    M	 po/ChangeLog
+
+    svn path=/trunk/; revision=2374
+
+M	ChangeLog
+M	configure.ac
+M	po/ChangeLog

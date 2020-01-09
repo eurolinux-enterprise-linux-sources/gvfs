@@ -1,0 +1,10 @@
+non-local metadata change on move and delete
+dbus service for async read
+finish nautilus metadata conversion for old db
+setting 10000 items => error
+
+later:
+change notification, listen to dbus messages
+NFS - log in /tmp
+make metabuilder structs private? export api?
+exit gvfsd-metadata on idle
