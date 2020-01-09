@@ -1,7 +1,7 @@
 Summary: Backends for the gio framework in GLib
 Name: gvfs
 Version: 1.4.3
-Release: 26%{?dist}
+Release: 27%{?dist}
 License: LGPLv2+
 Group: System Environment/Libraries
 URL: http://www.gtk.org
@@ -216,7 +216,9 @@ Patch144: gvfs-1.25.2-dav-Emit-progress-callbacks-when-copying-and-moving.patch
 # Translation updates
 # https://bugzilla.redhat.com/show_bug.cgi?id=1110451
 # https://bugzilla.redhat.com/show_bug.cgi?id=1270031
+# https://bugzilla.redhat.com/show_bug.cgi?id=1333640
 Patch145: translation-updates2.patch
+Patch146: translation-updates3.patch
 
 Obsoletes: gnome-mount <= 0.8
 Obsoletes: gnome-mount-nautilus-properties <= 0.8
@@ -422,6 +424,7 @@ mv common/gdbusutils.h common/gvfsdbusutils.h
 %patch144 -p1 -b .dav-emit-progress-callbacks-when-copying-and-moving
 
 %patch145 -p1 -b .translation-updates2
+%patch146 -p1 -b .translation-updates3
 
 %build
 
@@ -588,6 +591,9 @@ killall -USR1 gvfsd >&/dev/null || :
 
 
 %changelog
+* Tue Nov 1 2016 Ondrej Holy <oholy@redhat.com> - 1.4.3-27
+- Translation updates (#1333640)
+
 * Fri Jan 8 2016 Ondrej Holy <oholy@redhat.com> - 1.4.3-26
 - Translation updates (#1110451, #1270031)
 
