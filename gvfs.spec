@@ -1,7 +1,7 @@
 Summary: Backends for the gio framework in GLib
 Name: gvfs
 Version: 1.4.3
-Release: 20%{?dist}
+Release: 22%{?dist}
 License: LGPLv2+
 Group: System Environment/Libraries
 URL: http://www.gtk.org
@@ -182,6 +182,14 @@ Patch127: gvfs-1.22.1-trash-do-not-care-about-mount-points-without-read-ac.patch
 # https://bugzilla.redhat.com/show_bug.cgi?id=1140451
 Patch128: gvfs-1.13.9-gdu-volume-monitor-Handle-gdu_pool_new-returning-NUL.patch
 Patch129: gvfs-1.13.9-gdu-volume-monitor-Don-t-unref-possibly-NULL-object.patch
+
+# Bug 1210203 - gvfsd-metadata causes high cpu and disk usage
+# https://bugzilla.redhat.com/show_bug.cgi?id=1210203
+Patch130: gvfs-1.21.92-metatree-avoid-endless-looping-when-the-entry-is-too.patch
+
+# Bug 1165676 - gvfsd-gphoto2 crashes when iPhone is connected
+# https://bugzilla.redhat.com/show_bug.cgi?id=1165676
+Patch131: gvfs-1.5.1-fix-NULL-dereference.patch
 
 Obsoletes: gnome-mount <= 0.8
 Obsoletes: gnome-mount-nautilus-properties <= 0.8
@@ -367,6 +375,9 @@ mv common/gdbusutils.h common/gvfsdbusutils.h
 %patch128 -p1 -b .handle-null-gdu-pool
 %patch129 -p1 -b .handle-null-gdu-pool-on-finalize
 
+%patch130 -p1 -b .avoid-metadata-looping
+%patch131 -p1 -b .fix-null-dereference
+
 %build
 
 # Needed for gvfs-0.2.1-archive-integration.patch
@@ -532,6 +543,12 @@ killall -USR1 gvfsd >&/dev/null || :
 
 
 %changelog
+* Fri Apr 10 2015 Ondrej Holy <oholy@redhat.com> - 1.4.3-22
+- Fix crash when iPhone is connected (#1165676)
+
+* Thu Apr 9 2015 Ondrej Holy <oholy@redhat.com> - 1.4.3-21
+- Avoid endless looping when the metatree entry is too large (#1210203)
+
 * Thu Dec 17 2014 Ondrej Holy <oholy@redhat.com> - 1.4.3-20
 - Handle gdu_pool_new() returning NULL gracefully (#1140451)
 
