@@ -1,7 +1,7 @@
 Summary: Backends for the gio framework in GLib
 Name: gvfs
 Version: 1.4.3
-Release: 22%{?dist}
+Release: 26%{?dist}
 License: LGPLv2+
 Group: System Environment/Libraries
 URL: http://www.gtk.org
@@ -191,6 +191,33 @@ Patch130: gvfs-1.21.92-metatree-avoid-endless-looping-when-the-entry-is-too.patc
 # https://bugzilla.redhat.com/show_bug.cgi?id=1165676
 Patch131: gvfs-1.5.1-fix-NULL-dereference.patch
 
+# Fix handling of paths containing dots in archives
+# https://bugzilla.redhat.com/show_bug.cgi?id=713179
+Patch132: gvfs-1.7.3-archive-Skip-leading-.-from-pathnames-if-present.patch
+Patch133: gvfs-1.21.2-archive-Ignore-filenames-consisting-of-a-single.patch
+Patch134: gvfs-1.21.92-archive-Fix-some-memory-leaks.patch
+Patch135: gvfs-1.21.92-archive-Allow-reading-files-with-.-in-the-path.patch
+
+# Fix metadata daemon crashes
+# https://bugzilla.redhat.com/show_bug.cgi?id=1110451
+Patch136: gvfs-1.23.4-metadata-don-t-crash-if-meta_tree_init-fails.patch
+Patch137: gvfs-1.23.91-metadata-return-if-meta_tree_refresh-failed.patch
+Patch138: gvfs-1.23.91-metatree-always-clear-fd-to-1.patch
+Patch139: gvfs-1.23.91-metadata-don-t-crash-if-tree-write-out-failed.patch
+
+# Use native move operation on dav
+# https://bugzilla.redhat.com/show_bug.cgi?id=1270031
+Patch140: gvfs-1.21.1-dav-Use-the-native-MOVE-operation-for-moving.patch
+Patch141: gvfs-1.23.2-dav-try-copy-and-delete-fallback-if-backup-couldn-t-.patch
+Patch142: gvfs-1.23.5-dav-Fix-up-error-handling-when-moving.patch
+Patch143: gvfs-1.23.5-dav-Fix-a-few-memory-leaks.patch
+Patch144: gvfs-1.25.2-dav-Emit-progress-callbacks-when-copying-and-moving.patch
+
+# Translation updates
+# https://bugzilla.redhat.com/show_bug.cgi?id=1110451
+# https://bugzilla.redhat.com/show_bug.cgi?id=1270031
+Patch145: translation-updates2.patch
+
 Obsoletes: gnome-mount <= 0.8
 Obsoletes: gnome-mount-nautilus-properties <= 0.8
 
@@ -378,6 +405,24 @@ mv common/gdbusutils.h common/gvfsdbusutils.h
 %patch130 -p1 -b .avoid-metadata-looping
 %patch131 -p1 -b .fix-null-dereference
 
+%patch132 -p1 -b .archive-skip-leading-.-from-pathnames-if-present
+%patch133 -p1 -b .archive-ignore-filenames-consisting-of-a-single
+%patch134 -p1 -b .archive-fix-some-memory-leaks
+%patch135 -p1 -b .archive-allow-reading-files-with-.-in-the-path
+
+%patch136 -p1 -b .metadata-don-t-crash-if-meta_tree_init-fails
+%patch137 -p1 -b .metadata-return-if-meta_tree_refresh-failed
+%patch138 -p1 -b .metatree-always-clear-fd-to-1
+%patch139 -p1 -b .metadata-don-t-crash-if-tree-write-out-failed
+
+%patch140 -p1 -b .dav-use-the-native-move-operation-for-moving
+%patch141 -p1 -b .dav-try-copy-and-delete-fallback-if-backup-couldn-t-
+%patch142 -p1 -b .dav-fix-up-error-handling-when-moving
+%patch143 -p1 -b .dav-fix-a-few-memory-leaks
+%patch144 -p1 -b .dav-emit-progress-callbacks-when-copying-and-moving
+
+%patch145 -p1 -b .translation-updates2
+
 %build
 
 # Needed for gvfs-0.2.1-archive-integration.patch
@@ -543,6 +588,18 @@ killall -USR1 gvfsd >&/dev/null || :
 
 
 %changelog
+* Fri Jan 8 2016 Ondrej Holy <oholy@redhat.com> - 1.4.3-26
+- Translation updates (#1110451, #1270031)
+
+* Thu Nov 19 2015 Ondrej Holy <oholy@redhat.com> - 1.4.3-25
+- Use native move operation on dav (#1270031)
+
+* Tue Nov 10 2015 Ondrej Holy <oholy@redhat.com> - 1.4.3-24
+- Fix metadata daemon crashes (#1110451)
+
+* Tue Nov 10 2015 Ondrej Holy <oholy@redhat.com> - 1.4.3-23
+- Fix handling of paths containing dots in archives (#713179)
+
 * Fri Apr 10 2015 Ondrej Holy <oholy@redhat.com> - 1.4.3-22
 - Fix crash when iPhone is connected (#1165676)
 
