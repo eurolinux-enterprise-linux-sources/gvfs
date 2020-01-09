@@ -1,7 +1,7 @@
 Summary: Backends for the gio framework in GLib
 Name: gvfs
 Version: 1.4.3
-Release: 18%{?dist}
+Release: 20%{?dist}
 License: LGPLv2+
 Group: System Environment/Libraries
 URL: http://www.gtk.org
@@ -173,6 +173,15 @@ Patch124: gconf-allow-deprecated.patch
 # https://bugzilla.redhat.com/show_bug.cgi?id=1118325
 Patch125: gvfs-1.6.4-sftp-use-poll-to-cope-with-openssh-5.6-changes.patch
 Patch126: gvfs-1.6.4-sftp-fix-poll-timeout.patch
+
+# gvfsd-trash is preventing autofs mounts from being expired when fs perms are o-rx
+# https://bugzilla.redhat.com/show_bug.cgi?id=998061
+Patch127: gvfs-1.22.1-trash-do-not-care-about-mount-points-without-read-ac.patch
+
+# The gvfs-gdu-volume-monitor process was aborted during system shutdown
+# https://bugzilla.redhat.com/show_bug.cgi?id=1140451
+Patch128: gvfs-1.13.9-gdu-volume-monitor-Handle-gdu_pool_new-returning-NUL.patch
+Patch129: gvfs-1.13.9-gdu-volume-monitor-Don-t-unref-possibly-NULL-object.patch
 
 Obsoletes: gnome-mount <= 0.8
 Obsoletes: gnome-mount-nautilus-properties <= 0.8
@@ -353,6 +362,11 @@ mv common/gdbusutils.h common/gvfsdbusutils.h
 %patch125 -p1 -b .sftp-use-poll
 %patch126 -p1 -b .sftp-fix-poll-timeout
 
+%patch127 -p1 -b .trash-ignore-mounts-without-read-access
+
+%patch128 -p1 -b .handle-null-gdu-pool
+%patch129 -p1 -b .handle-null-gdu-pool-on-finalize
+
 %build
 
 # Needed for gvfs-0.2.1-archive-integration.patch
@@ -518,6 +532,12 @@ killall -USR1 gvfsd >&/dev/null || :
 
 
 %changelog
+* Thu Dec 17 2014 Ondrej Holy <oholy@redhat.com> - 1.4.3-20
+- Handle gdu_pool_new() returning NULL gracefully (#1140451)
+
+* Thu Dec 4 2014 Ondrej Holy <oholy@redhat.com> - 1.4.3-19
+- Ignore mount points without read access from the trash backend (#998061)
+
 * Thu Jul 17 2014 Ondrej Holy <oholy@redhat.com> - 1.4.3-18
 - Fix GConf module building with updated GLib2 (#1118704)
 - Fix SFTP mounting with updated OpenSSH (#1118325)
