@@ -315,7 +315,7 @@ gvfs_udisks2_volume_monitor_init (GVfsUDisks2VolumeMonitor *monitor)
                     G_CALLBACK (on_client_changed),
                     monitor);
 
-  monitor->mount_monitor = g_unix_mount_monitor_new ();
+  monitor->mount_monitor = g_unix_mount_monitor_get ();
   g_signal_connect (monitor->mount_monitor,
                     "mounts-changed",
                     G_CALLBACK (mounts_changed),
@@ -747,12 +747,14 @@ should_include_volume_check_mount_points (GVfsUDisks2VolumeMonitor *monitor,
       mount_entry = g_unix_mount_at (mount_point, NULL);
       if (mount_entry != NULL)
         {
-          if (!should_include_mount (monitor, mount_entry))
+          if (should_include_mount (monitor, mount_entry))
             {
               g_unix_mount_free (mount_entry);
-              ret = FALSE;
+              ret = TRUE;
               goto out;
             }
+
+          ret = FALSE;
           g_unix_mount_free (mount_entry);
         }
     }

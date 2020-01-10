@@ -42,6 +42,10 @@
 #include "gproxydrive.h"
 #include "gproxymountoperation.h"
 #include "gvfsvolumemonitordbus.h"
+#include "gvfsmonitorimpl.h"
+#include "gvfsdbus.h"
+#include "gvfsdaemonprotocol.h"
+#include "gvfsutils.h"
 
 G_LOCK_DEFINE_STATIC(proxy_vm);
 
@@ -864,6 +868,8 @@ name_owner_appeared (GProxyVolumeMonitor *monitor)
   GProxyVolume *volume;
   GProxyMount *mount;
 
+  G_LOCK (proxy_vm);
+
   seed_monitor (monitor);
 
   /* emit signals for all the drives/volumes/mounts "added" */
@@ -878,6 +884,8 @@ name_owner_appeared (GProxyVolumeMonitor *monitor)
   g_hash_table_iter_init (&hash_iter, monitor->mounts);
   while (g_hash_table_iter_next (&hash_iter, NULL, (gpointer) &mount))
     signal_emit_in_idle (monitor, "mount-added", mount);
+
+  G_UNLOCK (proxy_vm);
 }
 
 static void
@@ -887,6 +895,8 @@ name_owner_vanished (GProxyVolumeMonitor *monitor)
   GProxyDrive *drive;
   GProxyVolume *volume;
   GProxyMount *mount;
+
+  G_LOCK (proxy_vm);
 
   g_hash_table_iter_init (&hash_iter, monitor->mounts);
   while (g_hash_table_iter_next (&hash_iter, NULL, (gpointer) &mount))
@@ -911,6 +921,8 @@ name_owner_vanished (GProxyVolumeMonitor *monitor)
       signal_emit_in_idle (monitor, "drive-disconnected", drive);
     }
   g_hash_table_remove_all (monitor->drives);
+
+  G_UNLOCK (proxy_vm);
 }
 
 static void
@@ -961,10 +973,7 @@ g_proxy_volume_monitor_constructor (GType                  type,
   klass = G_PROXY_VOLUME_MONITOR_CLASS (g_type_class_peek (type));
   object = g_hash_table_lookup (the_volume_monitors, (gpointer) type);
   if (object != NULL)
-    {
-      g_object_ref (object);
-      goto out;
-    }
+    goto out;
 
   dbus_name = klass->dbus_name;
 
@@ -976,6 +985,10 @@ g_proxy_volume_monitor_constructor (GType                  type,
                                       construct_properties);
 
   monitor = G_PROXY_VOLUME_MONITOR (object);
+
+  monitor->drives = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
+  monitor->volumes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
+  monitor->mounts = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
 
   error = NULL;
   monitor->proxy = gvfs_remote_volume_monitor_proxy_new_for_bus_sync (G_BUS_TYPE_SESSION,
@@ -1011,10 +1024,6 @@ g_proxy_volume_monitor_constructor (GType                  type,
   g_signal_connect (monitor->proxy, "volume-changed", G_CALLBACK (volume_changed), monitor);
   g_signal_connect (monitor->proxy, "volume-removed", G_CALLBACK (volume_removed), monitor);
 
-  monitor->drives = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
-  monitor->volumes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
-  monitor->mounts = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
-
   /* listen to when the owner of the service appears/disappears */
   g_signal_connect (monitor->proxy, "notify::g-name-owner", G_CALLBACK (name_owner_changed), monitor);
   /* initially seed drives/volumes/mounts if we have an owner */
@@ -1027,12 +1036,12 @@ g_proxy_volume_monitor_constructor (GType                  type,
 
   g_hash_table_insert (the_volume_monitors, (gpointer) type, object);
 
+ out:
   /* Take an extra reference to make the instance live forever - see also
    * the dispose() and finalize() vfuncs
    */
   g_object_ref (object);
 
- out:
   G_UNLOCK (proxy_vm);
   return object;
 }
@@ -1404,7 +1413,7 @@ g_proxy_volume_monitor_setup_session_bus_connection (void)
    * without spawning private dbus instances.
    * See bug 526454.
    */
-  if (g_getenv ("DBUS_SESSION_BUS_ADDRESS") == NULL)
+  if (!gvfs_have_session_bus ())
     return FALSE;
 
   if (the_volume_monitors == NULL)
@@ -1428,9 +1437,8 @@ g_proxy_volume_monitor_unload_cleanup (void)
 void
 g_proxy_volume_monitor_register (GIOModule *module)
 {
-  GDir *dir;
-  GError *error;
-  const char *monitors_dir;
+  GList *impls, *l;
+  gboolean res, got_list;
 
   /* first register the abstract base type... */
   g_proxy_volume_monitor_register_type (G_TYPE_MODULE (module));
@@ -1446,102 +1454,72 @@ g_proxy_volume_monitor_register (GIOModule *module)
    *   - and if so the priority
    */
 
-  monitors_dir = g_getenv ("GVFS_MONITOR_DIR");
-  if (monitors_dir == NULL || *monitors_dir == 0)
-    monitors_dir = REMOTE_VOLUME_MONITORS_DIR;
+  impls = NULL;
+  got_list = FALSE;
 
-  error = NULL;
-  dir = g_dir_open (monitors_dir, 0, &error);
-  if (dir == NULL)
-    {
-      g_warning ("cannot open directory %s: %s", monitors_dir, error->message);
-      g_error_free (error);
-    }
-  else
-    {
-      const char *name;
+  G_LOCK (proxy_vm);
+  res = g_proxy_volume_monitor_setup_session_bus_connection ();
+  G_UNLOCK (proxy_vm);
 
-      while ((name = g_dir_read_name (dir)) != NULL)
+  if (res)
+    {
+      GVfsDBusDaemon *proxy;
+      GError *error = NULL;
+
+      proxy = gvfs_dbus_daemon_proxy_new_for_bus_sync (G_BUS_TYPE_SESSION,
+                                                       G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS | G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
+                                                       G_VFS_DBUS_DAEMON_NAME,
+                                                       G_VFS_DBUS_DAEMON_PATH,
+                                                       NULL,
+                                                       &error);
+      if (proxy != NULL)
         {
-          GKeyFile *key_file;
-          char *type_name;
-          char *path;
-          char *dbus_name;
-          gboolean is_native;
-          int native_priority;
+          GVariant *monitors, *child;
+          GVfsMonitorImplementation *impl;
+          int i;
 
-          type_name = NULL;
-          key_file = NULL;
-          dbus_name = NULL;
-          path = NULL;
-
-          if (!g_str_has_suffix (name, ".monitor"))
-            goto cont;
-
-          path = g_build_filename (monitors_dir, name, NULL);
-
-          key_file = g_key_file_new ();
-          error = NULL;
-          if (!g_key_file_load_from_file (key_file, path, G_KEY_FILE_NONE, &error))
+          if (gvfs_dbus_daemon_call_list_monitor_implementations_sync (proxy,
+                                                                       &monitors, NULL, &error))
             {
-              g_warning ("error loading key-value file %s: %s", path, error->message);
-              g_error_free (error);
-              goto cont;
-            }
-
-          type_name = g_key_file_get_string (key_file, "RemoteVolumeMonitor", "Name", &error);
-          if (error != NULL)
-            {
-              g_warning ("error extracting Name key from %s: %s", path, error->message);
-              g_error_free (error);
-              goto cont;
-            }
-
-          dbus_name = g_key_file_get_string (key_file, "RemoteVolumeMonitor", "DBusName", &error);
-          if (error != NULL)
-            {
-              g_warning ("error extracting DBusName key from %s: %s", path, error->message);
-              g_error_free (error);
-              goto cont;
-            }
-
-          is_native = g_key_file_get_boolean (key_file, "RemoteVolumeMonitor", "IsNative", &error);
-          if (error != NULL)
-            {
-              g_warning ("error extracting IsNative key from %s: %s", path, error->message);
-              g_error_free (error);
-              goto cont;
-            }
-
-          if (is_native)
-            {
-              native_priority = g_key_file_get_integer (key_file, "RemoteVolumeMonitor", "NativePriority", &error);
-              if (error != NULL)
+              got_list = TRUE;
+              for (i = 0; i < g_variant_n_children (monitors); i++)
                 {
-                  g_warning ("error extracting NativePriority key from %s: %s", path, error->message);
-                  g_error_free (error);
-                  goto cont;
+                  child = g_variant_get_child_value (monitors, i);
+                  impl = g_vfs_monitor_implementation_from_dbus (child);
+                  impls = g_list_prepend (impls, impl);
+                  g_variant_unref (child);
                 }
+              g_variant_unref (monitors);
             }
           else
             {
-              native_priority = 0;
+              if (!g_error_matches (error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD))
+                g_debug ("Error: %s\n", error->message);
+              g_error_free (error);
             }
-
-          register_volume_monitor (G_TYPE_MODULE (module),
-                                   type_name,
-                                   dbus_name,
-                                   is_native,
-                                   native_priority);
-
-        cont:
-
-          g_free (type_name);
-          g_free (dbus_name);
-          g_free (path);
-          if (key_file != NULL)
-              g_key_file_free (key_file);
         }
-      g_dir_close (dir);
+      else
+        {
+          g_debug ("Error: %s\n", error->message);
+          g_error_free (error);
+        }
     }
+
+  /* Fall back on the old non-dbus version for compatibility with older
+     versions of the services */
+  if (!got_list)
+    impls = g_vfs_list_monitor_implementations ();
+
+  for (l = impls; l != NULL; l = l->next)
+    {
+      GVfsMonitorImplementation *impl = l->data;
+
+      register_volume_monitor (G_TYPE_MODULE (module),
+                               impl->type_name,
+                               impl->dbus_name,
+                               impl->is_native,
+                               impl->native_priority);
+    }
+
+  g_list_free_full (impls, (GDestroyNotify)g_vfs_monitor_implementation_free);
 }

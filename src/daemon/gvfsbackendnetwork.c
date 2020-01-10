@@ -299,7 +299,7 @@ update_from_files (GVfsBackendNetwork *backend,
         }
     }
 
-  g_list_foreach (old_files, (GFunc)network_file_free, NULL);
+  g_list_free_full (old_files, (GDestroyNotify)network_file_free);
 }
 
 static void
@@ -528,6 +528,7 @@ mount_smb_done_cb (GObject *object,
       g_object_unref (backend->mount_job);
     }  
   g_mutex_unlock (&backend->smb_mount_lock);
+  g_object_unref (backend);
 }
 
 static void
@@ -551,7 +552,7 @@ remount_smb (GVfsBackendNetwork *backend, GVfsJobMount *job)
   file = g_file_new_for_uri (workgroup);
 
   g_file_mount_enclosing_volume (file, G_MOUNT_MOUNT_NONE,
-                                 NULL, NULL, mount_smb_done_cb, backend);
+                                 NULL, NULL, mount_smb_done_cb, g_object_ref (backend));
   g_free (workgroup);
   g_object_unref (file);
 }
@@ -652,7 +653,7 @@ smb_settings_change_event_cb (GSettings *settings,
     {
       g_signal_handlers_disconnect_by_func (backend->smb_monitor,
 					    notify_smb_files_changed,
-					    backend->smb_monitor);
+					    backend);
       g_file_monitor_cancel (backend->smb_monitor);
       g_object_unref (backend->smb_monitor);
       backend->smb_monitor = NULL;
@@ -858,6 +859,19 @@ try_create_monitor (GVfsBackend *backend,
   return TRUE;
 }
 
+static gboolean
+try_query_fs_info (GVfsBackend *backend,
+                   GVfsJobQueryFsInfo *job,
+                   const char *filename,
+                   GFileInfo *info,
+                   GFileAttributeMatcher *matcher)
+{
+  g_file_info_set_attribute_string (info, G_FILE_ATTRIBUTE_FILESYSTEM_TYPE, "network");
+  g_file_info_set_attribute_boolean (info, G_FILE_ATTRIBUTE_FILESYSTEM_REMOTE, TRUE);
+  g_vfs_job_succeeded (G_VFS_JOB (job));
+  return TRUE;
+}
+
 static void
 g_vfs_backend_network_init (GVfsBackendNetwork *network_backend)
 {
@@ -945,9 +959,37 @@ g_vfs_backend_network_finalize (GObject *object)
   g_object_unref (backend->workgroup_symbolic_icon);
   g_object_unref (backend->server_symbolic_icon);
   if (backend->smb_settings)
-    g_object_unref (backend->smb_settings);
+    {
+      g_signal_handlers_disconnect_by_func (backend->smb_settings, smb_settings_change_event_cb, backend);
+      g_clear_object (&backend->smb_settings);
+    }
   if (backend->dnssd_settings)
-    g_object_unref (backend->dnssd_settings);
+    {
+      g_signal_handlers_disconnect_by_func (backend->dnssd_settings, dnssd_settings_change_event_cb, backend);
+      g_clear_object (&backend->dnssd_settings);
+    }
+  if (backend->dnssd_monitor)
+    {
+      g_signal_handlers_disconnect_by_func (backend->dnssd_monitor, notify_dnssd_local_changed, backend);
+      g_clear_object (&backend->dnssd_monitor);
+    }
+  if (backend->smb_monitor)
+    {
+      g_signal_handlers_disconnect_by_func (backend->smb_monitor, notify_smb_files_changed, backend);
+      g_clear_object (&backend->smb_monitor);
+    }
+  if (backend->idle_tag)
+    {
+      g_source_remove (backend->idle_tag);
+      backend->idle_tag = 0;
+    }
+  if (backend->files)
+    {
+      g_list_free_full (backend->files, (GDestroyNotify)network_file_free);
+      backend->files = NULL;
+    }
+  g_free (backend->current_workgroup);
+  g_free (backend->extra_domains);
 
   if (G_OBJECT_CLASS (g_vfs_backend_network_parent_class)->finalize)
     (*G_OBJECT_CLASS (g_vfs_backend_network_parent_class)->finalize) (object);
@@ -963,6 +1005,7 @@ g_vfs_backend_network_class_init (GVfsBackendNetworkClass *klass)
 
   backend_class->try_mount        = try_mount;
   backend_class->try_query_info   = try_query_info;
+  backend_class->try_query_fs_info = try_query_fs_info;
   backend_class->try_enumerate    = try_enumerate;
   backend_class->try_create_dir_monitor = try_create_monitor;
   backend_class->try_create_file_monitor = try_create_monitor;

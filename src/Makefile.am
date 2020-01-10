@@ -25,12 +25,8 @@ EXTRA_DIST = \
 	README.commits		\
 	MAINTAINERS		\
 	m4			\
-	$(NULL)
-
-DISTCLEANFILES = \
-	intltool-extract	\
-	intltool-merge		\
-	intltool-update		\
+	gettext/its/polkit.loc	\
+	gettext/its/polkit.its	\
 	$(NULL)
 
 distclean-local:

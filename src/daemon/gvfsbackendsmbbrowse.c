@@ -44,6 +44,7 @@
 #include "gvfsdaemonprotocol.h"
 #include "gvfskeyring.h"
 #include "gmounttracker.h"
+#include "gvfsbackendsmbprivate.h"
 
 #include <libsmbclient.h>
 
@@ -52,15 +53,6 @@
 
 /* Time in seconds before we mark dirents cache outdated */
 #define DEFAULT_CACHE_EXPIRATION_TIME 10
-
-
-#define PRINT_DEBUG 
-
-#ifdef PRINT_DEBUG 
-#define DEBUG(msg...) g_print("### SMB-BROWSE: " msg)
-#else 
-#define DEBUG(...) 
-#endif 
 
 typedef struct {
   unsigned int smbc_type;
@@ -260,7 +252,7 @@ g_vfs_backend_smb_browse_init (GVfsBackendSmbBrowse *backend)
 
   g_object_unref (settings);
 
-  DEBUG ("g_vfs_backend_smb_browse_init: default workgroup = '%s'\n", backend->default_workgroup ? backend->default_workgroup : "NULL");
+  g_debug ("g_vfs_backend_smb_browse_init: default workgroup = '%s'\n", backend->default_workgroup ? backend->default_workgroup : "NULL");
 }
 
 /**
@@ -311,7 +303,7 @@ auth_callback (SMBCCTX *context,
       /*  Don't prompt for credentials, let smbclient finish the mount loop  */
       strncpy (username_out, "ABORT", unmaxlen);
       strncpy (password_out, "", pwmaxlen);
-      DEBUG ("auth_callback - mount_cancelled\n");
+      g_debug ("auth_callback - mount_cancelled\n");
       return;
     }
 
@@ -333,13 +325,13 @@ auth_callback (SMBCCTX *context,
     {
       /* Try again if kerberos login + anonymous fallback fails */
       backend->mount_try_again = TRUE;
-      DEBUG ("auth_callback - anonymous pass\n");
+      g_debug ("auth_callback - anonymous pass\n");
     }
   else
     {
       gboolean in_keyring = FALSE;
 
-      DEBUG ("auth_callback - normal pass\n");
+      g_debug ("auth_callback - normal pass\n");
 
       if (!backend->password_in_keyring)
         {
@@ -356,9 +348,9 @@ auth_callback (SMBCCTX *context,
 	  backend->password_in_keyring = in_keyring;
 
 	  if (in_keyring)
-	    DEBUG ("auth_callback - reusing keyring credentials: user = '%s', domain = '%s'\n",
-	           ask_user ? ask_user : "NULL",
-	           ask_domain ? ask_domain : "NULL");
+            g_debug ("auth_callback - reusing keyring credentials: user = '%s', domain = '%s'\n",
+                     ask_user ? ask_user : "NULL",
+                     ask_domain ? ask_domain : "NULL");
 	}
 
       if (!in_keyring)
@@ -373,7 +365,7 @@ auth_callback (SMBCCTX *context,
 	  if (backend->user == NULL)
 	    flags |= G_ASK_PASSWORD_NEED_USERNAME;
 
-	  DEBUG ("auth_callback - asking for password...\n");
+          g_debug ("auth_callback - asking for password...\n");
 
 	  /* translators: %s is a server name */
 	  message = g_strdup_printf (_("Password required for %s"),
@@ -420,8 +412,8 @@ auth_callback (SMBCCTX *context,
   backend->last_user = g_strdup (username_out);
   backend->last_domain = g_strdup (domain_out);
   backend->last_password = g_strdup (password_out);
-  DEBUG ("auth_callback - out: last_user = '%s', last_domain = '%s'\n", 
-         backend->last_user, backend->last_domain);
+  g_debug ("auth_callback - out: last_user = '%s', last_domain = '%s'\n",
+           backend->last_user, backend->last_domain);
 }
 
 /* Add a server to the cache system
@@ -448,12 +440,12 @@ add_cached_server (SMBCCTX *context, SMBCSRV *new,
   cached_server->domain = g_strdup (domain);
   cached_server->username = g_strdup (username);
 
-  DEBUG ("adding cached server '%s'\\'%s', user '%s';'%s' with data %p\n",
-          server_name ? server_name : "NULL",
-          share_name ? share_name : "(no share)",
-          domain ? domain : "(no domain)",
-          username ? username : "NULL",
-          new);
+  g_debug ("adding cached server '%s'\\'%s', user '%s';'%s' with data %p\n",
+           server_name ? server_name : "NULL",
+           share_name ? share_name : "(no share)",
+           domain ? domain : "(no domain)",
+           username ? username : "NULL",
+           new);
 
   if (server_cache == NULL)
     server_cache = g_hash_table_new_full (cached_server_hash, cached_server_equal,
@@ -486,7 +478,7 @@ remove_cached_server (SMBCCTX * context, SMBCSRV * server)
 
   if (server_cache)
     {
-      DEBUG ("removing cached servers with data %p\n", server);
+      g_debug ("removing cached servers with data %p\n", server);
       num = g_hash_table_foreach_remove (server_cache, remove_cb, server);
       if (num != 0)
 	return 0;
@@ -518,16 +510,16 @@ get_cached_server (SMBCCTX * context,
   };
   SMBCSRV *ret = NULL;
 
-  DEBUG ("looking up cached server '%s'\\'%s', user '%s';'%s'\n",
-          server_name ? server_name : "NULL",
-          share_name ? share_name : "(no share)",
-          domain ? domain : "(no domain)",
-          username ? username : "NULL");
+  g_debug ("looking up cached server '%s'\\'%s', user '%s';'%s'\n",
+           server_name ? server_name : "NULL",
+           share_name ? share_name : "(no share)",
+           domain ? domain : "(no domain)",
+           username ? username : "NULL");
 
   if (server_cache)
     ret = g_hash_table_lookup (server_cache, &key);
 
-  DEBUG ("  returning %p\n", ret);
+  g_debug ("  returning %p\n", ret);
   return ret;
 }
 
@@ -541,7 +533,7 @@ get_cached_server (SMBCCTX * context,
 static int
 purge_cached (SMBCCTX * context)
 {
-  DEBUG ("purging server cache\n");
+  g_debug ("purging server cache\n");
 
   if (server_cache)
     g_hash_table_remove_all (server_cache);
@@ -598,7 +590,7 @@ g_string_append_encoded (GString *string,
 static gboolean
 update_cache (GVfsBackendSmbBrowse *backend, SMBCFILE *supplied_dir)
 {
-  GString *uri;
+  char *uri;
   char dirents[1024*4];
   struct smbc_dirent *dirp;
   GList *entries;
@@ -616,25 +608,17 @@ update_cache (GVfsBackendSmbBrowse *backend, SMBCFILE *supplied_dir)
 
   g_mutex_lock (&backend->update_cache_lock);
   
-  DEBUG ("update_cache - updating...\n");
+  g_debug ("update_cache - updating...\n");
   
   /* Update Cache */
-  uri = g_string_new ("smb://");
-
-  if (backend->server)
-    {
-      g_string_append_encoded (uri, backend->server, NULL, NULL);
-      if (backend->port != -1)
-        g_string_append_printf (uri, ":%d", backend->port);
-      g_string_append_c (uri, '/');
-    }
 
   smbc_opendir = smbc_getFunctionOpendir (backend->smb_context);
   smbc_getdents = smbc_getFunctionGetdents (backend->smb_context);
   smbc_closedir = smbc_getFunctionClosedir (backend->smb_context);
 
-  dir = supplied_dir ? supplied_dir : smbc_opendir (backend->smb_context, uri->str);
-  g_string_free (uri, TRUE);
+  uri = create_smb_uri (backend->server, backend->port, NULL, NULL);
+  dir = supplied_dir ? supplied_dir : smbc_opendir (backend->smb_context, uri);
+  g_free (uri);
   if (dir == NULL)
     {
       entry_errno = errno;
@@ -647,8 +631,8 @@ update_cache (GVfsBackendSmbBrowse *backend, SMBCFILE *supplied_dir)
       if (res <= 0)
         {
           if (res < 0)
-            DEBUG ("update_cache - smbc_getdents returned %d, errno = [%d] %s\n", 
-                   res, errno, g_strerror (errno));
+            g_debug ("update_cache - smbc_getdents returned %d, errno = [%d] %s\n",
+                     res, errno, g_strerror (errno));
 	  break;
 	}  
       
@@ -697,7 +681,7 @@ update_cache (GVfsBackendSmbBrowse *backend, SMBCFILE *supplied_dir)
   backend->entry_errno = entry_errno;
   backend->last_entry_update = time (NULL);
 
-  DEBUG ("update_cache - done.\n");
+  g_debug ("update_cache - done.\n");
 
   g_mutex_unlock (&backend->entries_lock);
   g_mutex_unlock (&backend->update_cache_lock);
@@ -849,7 +833,7 @@ do_mount (GVfsBackend *backend,
   char *icon;
   char *symbolic_icon;
   gchar *port_str;
-  GString *uri;
+  char *uri;
   gboolean res;
   GMountSpec *browse_mount_spec;
   smbc_opendir_fn smbc_opendir;
@@ -870,11 +854,7 @@ do_mount (GVfsBackend *backend,
   if (debug)
     debug_val = atoi (debug);
   else
-#ifdef PRINT_DEBUG
-    debug_val = 4;
-#else
     debug_val = 0;
-#endif
 
   smbc_setDebug (smb_context, debug_val);
   smbc_setFunctionAuthDataWithContext (smb_context, auth_callback);
@@ -886,10 +866,6 @@ do_mount (GVfsBackend *backend,
   
   if (op_backend->default_workgroup != NULL)
     smbc_setWorkgroup (smb_context, op_backend->default_workgroup);
-
-#ifndef DEPRECATED_SMBC_INTERFACE
-  smb_context->flags = 0;
-#endif
 
   /* Initial settings: 
    *   - use Kerberos (always) 
@@ -969,35 +945,27 @@ do_mount (GVfsBackend *backend,
   smbc_opendir = smbc_getFunctionOpendir (smb_context);
   smbc_closedir = smbc_getFunctionClosedir (smb_context);
 
-  uri = g_string_new ("smb://");
+  uri = create_smb_uri (op_backend->server, op_backend->port, NULL, NULL);
 
-  if (op_backend->server)
-    {
-      g_string_append_encoded (uri, op_backend->server, NULL, NULL);
-      if (op_backend->port != -1)
-        g_string_append_printf (uri, ":%d", op_backend->port);
-      g_string_append_c (uri, '/');
-    }
-
-  DEBUG ("do_mount - URI = %s\n", uri->str);
+  g_debug ("do_mount - URI = %s\n", uri);
 
   do
     {
       op_backend->mount_try_again = FALSE;
       op_backend->mount_cancelled = FALSE;
 
-      DEBUG ("do_mount - try #%d \n", op_backend->mount_try);
+      g_debug ("do_mount - try #%d \n", op_backend->mount_try);
 
-      dir = smbc_opendir (smb_context, uri->str);
+      dir = smbc_opendir (smb_context, uri);
 
-      DEBUG ("do_mount - [%s; %d] dir = %p, cancelled = %d, errno = [%d] '%s' \n", 
-             uri->str, op_backend->mount_try, dir, op_backend->mount_cancelled, 
+      g_debug ("do_mount - [%s; %d] dir = %p, cancelled = %d, errno = [%d] '%s' \n",
+             uri, op_backend->mount_try, dir, op_backend->mount_cancelled,
              errno, g_strerror (errno));
 
       if (dir == NULL && 
           (op_backend->mount_cancelled || (errno != EPERM && errno != EACCES)))
         {
-	  DEBUG ("do_mount - (errno != EPERM && errno != EACCES), cancelled = %d, breaking\n", op_backend->mount_cancelled);
+          g_debug ("do_mount - (errno != EPERM && errno != EACCES), cancelled = %d, breaking\n", op_backend->mount_cancelled);
 	  break;
 	}
 
@@ -1006,7 +974,7 @@ do_mount (GVfsBackend *backend,
           /*  Let update_cache() do enumeration, check for the smbc_getdents() result */
           res = update_cache (op_backend, dir);
           smbc_closedir (smb_context, dir);
-          DEBUG ("do_mount - login successful, res = %d\n", res);
+          g_debug ("do_mount - login successful, res = %d\n", res);
           if (res)
             break;
         }
@@ -1021,7 +989,7 @@ do_mount (GVfsBackend *backend,
        */
       if (op_backend->mount_try == 0)
         {
-          DEBUG ("do_mount - after anon, enabling NTLMSSP fallback\n");
+          g_debug ("do_mount - after anon, enabling NTLMSSP fallback\n");
           smbc_setOptionFallbackAfterKerberos (op_backend->smb_context, 1);
           smbc_setOptionNoAutoAnonymousLogin (op_backend->smb_context, 1);
         }
@@ -1029,7 +997,7 @@ do_mount (GVfsBackend *backend,
     }
   while (op_backend->mount_try_again);
 
-  g_string_free (uri, TRUE);
+  g_free (uri);
 
   op_backend->mount_source = NULL;
 
@@ -1138,7 +1106,7 @@ run_mount_mountable (GVfsBackendSmbBrowse *backend,
       else
 	g_set_error_literal (&error,
 			     G_IO_ERROR, G_IO_ERROR_NOT_MOUNTABLE_FILE,
-			     _("The file is not a mountable"));
+			     _("Not a mountable file"));
     }
   else
     g_set_error_literal (&error,
@@ -1184,7 +1152,7 @@ try_mount_mountable (GVfsBackend *backend,
     {
       g_vfs_job_failed (G_VFS_JOB (job),
 			G_IO_ERROR, G_IO_ERROR_NOT_MOUNTABLE_FILE,
-			_("The file is not a mountable"));
+			_("Not a mountable file"));
       return TRUE;
     }
   
@@ -1529,6 +1497,19 @@ try_enumerate (GVfsBackend *backend,
   return TRUE;
 }
 
+static gboolean
+try_query_fs_info (GVfsBackend *backend,
+                   GVfsJobQueryFsInfo *job,
+                   const char *filename,
+                   GFileInfo *info,
+                   GFileAttributeMatcher *matcher)
+{
+  g_file_info_set_attribute_string (info, G_FILE_ATTRIBUTE_FILESYSTEM_TYPE, "cifs");
+  g_file_info_set_attribute_boolean (info, G_FILE_ATTRIBUTE_FILESYSTEM_REMOTE, TRUE);
+  g_vfs_job_succeeded (G_VFS_JOB (job));
+  return TRUE;
+}
+
 static void
 g_vfs_backend_smb_browse_class_init (GVfsBackendSmbBrowseClass *klass)
 {
@@ -1548,6 +1529,7 @@ g_vfs_backend_smb_browse_class_init (GVfsBackendSmbBrowseClass *klass)
   backend_class->try_close_read = try_close_read;
   backend_class->query_info = do_query_info;
   backend_class->try_query_info = try_query_info;
+  backend_class->try_query_fs_info = try_query_fs_info;
   backend_class->enumerate = do_enumerate;
   backend_class->try_enumerate = try_enumerate;
 }

@@ -38,6 +38,12 @@
 
 #define STDIN_FILENO 0
 
+typedef enum {
+  MOUNT_OP_NONE,
+  MOUNT_OP_ASKED,
+  MOUNT_OP_ABORTED
+} MountOpState;
+
 static int outstanding_mounts = 0;
 static GMainLoop *main_loop;
 
@@ -45,6 +51,8 @@ static GMainLoop *main_loop;
 static gboolean mount_mountable = FALSE;
 static gboolean mount_unmount = FALSE;
 static gboolean mount_eject = FALSE;
+static gboolean force = FALSE;
+static gboolean anonymous = FALSE;
 static gboolean mount_list = FALSE;
 static gboolean extra_detail = FALSE;
 static gboolean mount_monitor = FALSE;
@@ -61,6 +69,8 @@ static const GOptionEntry entries[] =
   { "unmount", 'u', 0, G_OPTION_ARG_NONE, &mount_unmount, N_("Unmount"), NULL},
   { "eject", 'e', 0, G_OPTION_ARG_NONE, &mount_eject, N_("Eject"), NULL},
   { "unmount-scheme", 's', 0, G_OPTION_ARG_STRING, &unmount_scheme, N_("Unmount all mounts with the given scheme"), N_("SCHEME") },
+  { "force", 'f', 0, G_OPTION_ARG_NONE, &force, N_("Ignore outstanding file operations when unmounting or ejecting"), NULL },
+  { "anonymous", 'a', 0, G_OPTION_ARG_NONE, &anonymous, N_("Use an anonymous user when authenticating"), NULL },
   /* Translator: List here is a verb as in 'List all mounts' */
   { "list", 'l', 0, G_OPTION_ARG_NONE, &mount_list, N_("List"), NULL},
   { "monitor", 'o', 0, G_OPTION_ARG_NONE, &mount_monitor, N_("Monitor events"), NULL},
@@ -112,7 +122,12 @@ prompt_for (const char *prompt, const char *default_value, gboolean echo)
 #endif
 
   len = strlen (data);
-  if (len > 0 && data[len-1] == '\n')
+  if (len == 0)
+    {
+      g_print ("\n");
+      return NULL;
+    }
+  if (data[len-1] == '\n')
     data[len-1] = 0;
 
   if (!echo)
@@ -130,31 +145,60 @@ ask_password_cb (GMountOperation *op,
                  const char      *default_domain,
                  GAskPasswordFlags flags)
 {
-  char *s;
-  g_print ("%s\n", message);
-
-  if (flags & G_ASK_PASSWORD_NEED_USERNAME)
+  if ((flags & G_ASK_PASSWORD_ANONYMOUS_SUPPORTED) && anonymous)
     {
-      s = prompt_for ("User", default_user, TRUE);
-      g_mount_operation_set_username (op, s);
-      g_free (s);
+      g_mount_operation_set_anonymous (op, TRUE);
+    }
+  else
+    {
+      char *s;
+      g_print ("%s\n", message);
+
+      if (flags & G_ASK_PASSWORD_NEED_USERNAME)
+        {
+          s = prompt_for ("User", default_user, TRUE);
+          if (!s)
+            goto error;
+          g_mount_operation_set_username (op, s);
+          g_free (s);
+        }
+
+      if (flags & G_ASK_PASSWORD_NEED_DOMAIN)
+        {
+          s = prompt_for ("Domain", default_domain, TRUE);
+          if (!s)
+            goto error;
+          g_mount_operation_set_domain (op, s);
+          g_free (s);
+        }
+
+      if (flags & G_ASK_PASSWORD_NEED_PASSWORD)
+        {
+          s = prompt_for ("Password", NULL, FALSE);
+          if (!s)
+            goto error;
+          g_mount_operation_set_password (op, s);
+          g_free (s);
+        }
     }
 
-  if (flags & G_ASK_PASSWORD_NEED_DOMAIN)
+  /* Only try anonymous access once. */
+  if (anonymous &&
+      GPOINTER_TO_INT (g_object_get_data (G_OBJECT (op), "state")) == MOUNT_OP_ASKED)
     {
-      s = prompt_for ("Domain", default_domain, TRUE);
-      g_mount_operation_set_domain (op, s);
-      g_free (s);
+      g_object_set_data (G_OBJECT (op), "state", GINT_TO_POINTER (MOUNT_OP_ABORTED));
+      g_mount_operation_reply (op, G_MOUNT_OPERATION_ABORTED);
+    }
+  else
+    {
+      g_object_set_data (G_OBJECT (op), "state", GINT_TO_POINTER (MOUNT_OP_ASKED));
+      g_mount_operation_reply (op, G_MOUNT_OPERATION_HANDLED);
     }
 
-  if (flags & G_ASK_PASSWORD_NEED_PASSWORD)
-    {
-      s = prompt_for ("Password", NULL, FALSE);
-      g_mount_operation_set_password (op, s);
-      g_free (s);
-    }
+  return;
 
-  g_mount_operation_reply (op, G_MOUNT_OPERATION_HANDLED);
+error:
+  g_mount_operation_reply (op, G_MOUNT_OPERATION_ABORTED);
 }
 
 static void
@@ -177,6 +221,9 @@ ask_question_cb (GMountOperation *op,
     }
 
   s = prompt_for ("Choice", NULL, TRUE);
+  if (!s)
+    goto error;
+
   choice = atoi (s);
   if (choice > 0 && choice < i)
     {
@@ -184,6 +231,11 @@ ask_question_cb (GMountOperation *op,
       g_mount_operation_reply (op, G_MOUNT_OPERATION_HANDLED);
     }
   g_free (s);
+
+  return;
+
+error:
+  g_mount_operation_reply (op, G_MOUNT_OPERATION_ABORTED);
 }
 
 static void
@@ -193,13 +245,17 @@ mount_mountable_done_cb (GObject *object,
 {
   GFile *target;
   GError *error = NULL;
+  GMountOperation *op = user_data;
 
   target = g_file_mount_mountable_finish (G_FILE (object), res, &error);
 
   if (target == NULL)
     {
-      g_printerr (_("Error mounting location: %s\n"), error->message);
       success = FALSE;
+      if (GPOINTER_TO_INT (g_object_get_data (G_OBJECT (op), "state")) == MOUNT_OP_ABORTED)
+        g_printerr (_("Error mounting location: Anonymous access denied\n"));
+      else if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_FAILED_HANDLED))
+        g_printerr (_("Error mounting location: %s\n"), error->message);
     }
   else
     g_object_unref (target);
@@ -217,13 +273,17 @@ mount_done_cb (GObject *object,
 {
   gboolean succeeded;
   GError *error = NULL;
+  GMountOperation *op = user_data;
 
   succeeded = g_file_mount_enclosing_volume_finish (G_FILE (object), res, &error);
 
   if (!succeeded)
     {
-      g_printerr (_("Error mounting location: %s\n"), error->message);
       success = FALSE;
+      if (GPOINTER_TO_INT (g_object_get_data (G_OBJECT (op), "state")) == MOUNT_OP_ABORTED)
+        g_printerr (_("Error mounting location: Anonymous access denied\n"));
+      else if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_FAILED_HANDLED))
+        g_printerr (_("Error mounting location: %s\n"), error->message);
     }
 
   outstanding_mounts--;
@@ -238,6 +298,8 @@ new_mount_op (void)
   GMountOperation *op;
 
   op = g_mount_operation_new ();
+
+  g_object_set_data (G_OBJECT (op), "state", GINT_TO_POINTER (MOUNT_OP_NONE));
 
   g_signal_connect (op, "ask_password", G_CALLBACK (ask_password_cb), NULL);
   g_signal_connect (op, "ask_question", G_CALLBACK (ask_question_cb), NULL);
@@ -299,6 +361,7 @@ unmount (GFile *file)
   GMount *mount;
   GError *error = NULL;
   GMountOperation *mount_op;
+  GMountUnmountFlags flags;
 
   if (file == NULL)
     return;
@@ -312,7 +375,8 @@ unmount (GFile *file)
     }
 
   mount_op = new_mount_op ();
-  g_mount_unmount_with_operation (mount, 0, mount_op, NULL, unmount_done_cb, NULL);
+  flags = force ? G_MOUNT_UNMOUNT_FORCE : G_MOUNT_UNMOUNT_NONE;
+  g_mount_unmount_with_operation (mount, flags, mount_op, NULL, unmount_done_cb, NULL);
   g_object_unref (mount_op);
 
   outstanding_mounts++;
@@ -348,6 +412,7 @@ eject (GFile *file)
   GMount *mount;
   GError *error = NULL;
   GMountOperation *mount_op;
+  GMountUnmountFlags flags;
 
   if (file == NULL)
     return;
@@ -361,7 +426,8 @@ eject (GFile *file)
     }
 
   mount_op = new_mount_op ();
-  g_mount_eject_with_operation (mount, 0, mount_op, NULL, eject_done_cb, NULL);
+  flags = force ? G_MOUNT_UNMOUNT_FORCE : G_MOUNT_UNMOUNT_NONE;
+  g_mount_eject_with_operation (mount, flags, mount_op, NULL, eject_done_cb, NULL);
   g_object_unref (mount_op);
 
   outstanding_mounts++;
@@ -713,6 +779,7 @@ list_drives (GList *drives,
               g_object_unref (icon);
             }
 
+          g_print ("%*sis_removable=%d\n", indent + 2, "", g_drive_is_removable (drive));
           g_print ("%*sis_media_removable=%d\n", indent + 2, "", g_drive_is_media_removable (drive));
           g_print ("%*shas_media=%d\n", indent + 2, "", g_drive_has_media (drive));
           g_print ("%*sis_media_check_automatic=%d\n", indent + 2, "", g_drive_is_media_check_automatic (drive));

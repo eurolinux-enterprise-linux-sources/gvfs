@@ -11,8 +11,8 @@ AM_CPPFLAGS =					\
 	-I$(top_builddir)			\
 	-I$(top_builddir)/common		\
 	$(GLIB_CFLAGS) 				\
-	$(OBEXFTP_CFLAGS) $(EXPAT_CFLAGS)	\
 	$(KEYRING_CFLAGS)			\
+	$(GCR_CFLAGS)                           \
 	-DLIBEXEC_DIR=\"$(libexecdir)\" 	\
 	-DMOUNTABLE_DIR=\"$(mountdir)\" 	\
 	-DGVFS_LOCALEDIR=\""$(localedir)"\"
@@ -28,14 +28,21 @@ flags = $(AM_CPPFLAGS)
 
 gvfs_gschemas =
 gvfs_gschemas_convert =
+gvfs_gschemas_dist =
+gvfs_gschemas_convert_dist =
 
-# D-BUS service file
+# D-Bus and systemd service files
 %.service: %.service.in ../config.log
 	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
 
 servicedir = $(DBUS_SERVICE_DIR)
-service_in_files = gvfs-daemon.service.in
-service_DATA = gvfs-daemon.service
+service_in_files = org.gtk.vfs.Daemon.service.in
+service_DATA = org.gtk.vfs.Daemon.service
+
+systemd_user_in_files = gvfs-daemon.service.in
+if USE_SYSTEMD_USER_UNITS
+systemd_user_DATA = gvfs-daemon.service
+endif
 
 %.mount: %.mount.in ../config.log
 	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
@@ -45,8 +52,20 @@ service_DATA = gvfs-daemon.service
 
 libexec_PROGRAMS=gvfsd gvfsd-sftp gvfsd-trash gvfsd-computer gvfsd-burn gvfsd-localtest gvfsd-ftp gvfsd-network
 
-mount_in_files = sftp.mount.in ftp.mount.in trash.mount.in computer.mount.in burn.mount.in localtest.mount.in network.mount.in
-mount_DATA =  sftp.mount ftp.mount trash.mount computer.mount burn.mount localtest.mount network.mount
+mount_in_files = sftp.mount.in ftp.mount.in ftps.mount.in trash.mount.in computer.mount.in burn.mount.in localtest.mount.in network.mount.in
+mount_DATA =  sftp.mount ftp.mount ftps.mount trash.mount computer.mount burn.mount localtest.mount network.mount
+
+mount_in_files += admin.mount.in
+if HAVE_ADMIN
+mount_DATA += admin.mount
+libexec_PROGRAMS += gvfsd-admin
+endif
+
+mount_in_files +=google.mount.in
+if USE_GOOGLE
+mount_DATA += google.mount
+libexec_PROGRAMS += gvfsd-google
+endif
 
 mount_in_files +=recent.mount.in
 if USE_GTK
@@ -64,6 +83,8 @@ libexec_PROGRAMS += gvfsd-http gvfsd-dav
 endif
 
 mount_in_files += smb.mount.in smb-browse.mount.in
+gvfs_gschemas_dist += org.gnome.system.smb.gschema.xml
+gvfs_gschemas_convert_dist += gvfs-smb.convert
 if HAVE_SAMBA
 mount_DATA += smb.mount smb-browse.mount
 libexec_PROGRAMS += gvfsd-smb-browse gvfsd-smb
@@ -89,21 +110,9 @@ mount_DATA += mtp.mount
 libexec_PROGRAMS += gvfsd-mtp
 endif
 
-mount_in_files += obexftp.mount.in
-if USE_OBEXFTP
-mount_DATA += obexftp.mount
-libexec_PROGRAMS += gvfsd-obexftp
-BUILT_SOURCES = obexftp-marshal.c obexftp-marshal.h
-
-obexftp-marshal.h: obexftp-marshal.list
-	$(AM_V_GEN) glib-genmarshal $< --prefix=obexftp_marshal --header > $@
-
-obexftp-marshal.c: obexftp-marshal.list
-	$(AM_V_GEN) echo "#include \"obexftp-marshal.h\"" > $@ && glib-genmarshal $< --prefix=obexftp_marshal --body >> $@
-
-endif
-
 mount_in_files += dns-sd.mount.in
+gvfs_gschemas_dist += org.gnome.system.dns_sd.gschema.xml
+gvfs_gschemas_convert_dist += gvfs-dns-sd.convert
 if HAVE_AVAHI
 mount_DATA += dns-sd.mount
 libexec_PROGRAMS += gvfsd-dnssd
@@ -129,21 +138,32 @@ mount_DATA += afp-browse.mount afp.mount
 libexec_PROGRAMS += gvfsd-afp-browse gvfsd-afp
 endif
 
+mount_in_files += nfs.mount.in
+if HAVE_NFS
+mount_DATA += nfs.mount
+libexec_PROGRAMS += gvfsd-nfs
+endif
+
 noinst_DATA = $(mount_DATA:.mount=.localmount)
 
 EXTRA_DIST = 				\
-	gvfs-daemon.service.in		\
+	$(service_in_files)		\
+	$(systemd_user_in_files)	\
 	$(mount_in_files)		\
-	obexftp-marshal.list		\
-	$(gvfs_gschemas)		\
-	$(gvfs_gschemas_convert_DATA)	\
+	$(gvfs_gschemas_dist)		\
+	$(gvfs_gschemas_convert_dist)	\
 	$(gsettings_ENUM_FILES)		\
+	org.gtk.vfs.file-operations.policy.in.in \
 	$(NULL)
 
-DISTCLEANFILES = gvfs-daemon.service $(mount_DATA) $(noinst_DATA)
+DISTCLEANFILES = $(mount_DATA) $(noinst_DATA)
 
 CLEANFILES =					\
 	$(gsettings__enum_file)			\
+	$(service_DATA)				\
+	$(systemd_user_DATA)			\
+	$(gvfs_polkit_actions_DATA)		\
+	$(gvfs_polkit_actions_in_files)		\
 	*.gschema.valid
 
 noinst_PROGRAMS =				\
@@ -207,7 +227,8 @@ libgvfsdaemon_la_LDFLAGS = -no-undefined -avoid-version
 libgvfsdaemon_la_LIBADD = \
 	$(top_builddir)/common/libgvfscommon.la \
 	$(GLIB_LIBS) \
-	$(KEYRING_LIBS)
+	$(KEYRING_LIBS) \
+	$(GCR_LIBS)
 
 gvfsd_SOURCES = \
 	mount.c mount.h \
@@ -242,7 +263,7 @@ gvfsd_localtest_CPPFLAGS = \
 gvfsd_localtest_LDADD = $(libraries)
 
 gvfsd_smb_SOURCES = \
-	gvfsbackendsmb.c gvfsbackendsmb.h \
+	gvfsbackendsmb.c gvfsbackendsmb.h gvfsbackendsmbprivate.h \
 	daemon-main.c daemon-main.h \
 	daemon-main-generic.c 
 
@@ -257,40 +278,18 @@ gvfsd_smb_LDADD = $(SAMBA_LIBS) $(libraries)
 
 gvfsd_smb_browse_SOURCES = \
 	gvfsbackendsmbbrowse.c gvfsbackendsmbbrowse.h \
+	gvfsbackendsmb.c gvfsbackendsmb.h gvfsbackendsmbprivate.h \
 	daemon-main.c daemon-main.h \
 	daemon-main-generic.c 
 
 gvfsd_smb_browse_CPPFLAGS = \
 	$(flags) \
 	-DBACKEND_HEADER=gvfsbackendsmbbrowse.h \
-	-DMOUNTABLE_DBUS_NAME=org.gtk.vfs.mountpoint.smb_browse \
+	-DMOUNTABLE_DBUS_NAME=org.gtk.vfs.mountpoint_smb_browse \
 	-DMAX_JOB_THREADS=1 \
 	-DBACKEND_TYPES='"smb-network", G_VFS_TYPE_BACKEND_SMB_BROWSE,"smb-server", G_VFS_TYPE_BACKEND_SMB_BROWSE,'
 
 gvfsd_smb_browse_LDADD = $(SAMBA_LIBS) $(libraries)
-
-gvfsd_obexftp_SOURCES = \
-	gvfsbackendobexftp.c gvfsbackendobexftp.h \
-	obexftp-marshal.c obexftp-marshal.h \
-	gvfsbackendobexftp-fl-parser.c gvfsbackendobexftp-fl-parser.h \
-	gvfsbackendobexftp-cap-parser.c gvfsbackendobexftp-cap-parser.h \
-	daemon-main.c daemon-main.h \
-	daemon-main-generic.c
-
-gvfsd_obexftp_CPPFLAGS = \
-	$(flags) \
-	-DBACKEND_HEADER=gvfsbackendobexftp.h \
-	-DDEFAULT_BACKEND_TYPE=obex \
-	-DMAX_JOB_THREADS=1 \
-	-DBACKEND_TYPES='"obex", G_VFS_TYPE_BACKEND_OBEXFTP,'
-if USE_HAL
-gvfsd_obexftp_CPPFLAGS += $(HAL_CFLAGS)
-endif
-
-gvfsd_obexftp_LDADD = $(OBEXFTP_LIBS) $(EXPAT_LIBS) $(libraries)
-if USE_HAL
-gvfsd_obexftp_LDADD += $(HAL_LIBS)
-endif
 
 gvfsd_ftp_SOURCES = \
 	gvfsftpconnection.c gvfsftpconnection.h \
@@ -307,7 +306,7 @@ gvfsd_ftp_CPPFLAGS = \
 	-DBACKEND_HEADER=gvfsbackendftp.h \
 	-DDEFAULT_BACKEND_TYPE=ftp \
 	-DMAX_JOB_THREADS=10 \
-	-DBACKEND_TYPES='"ftp", G_VFS_TYPE_BACKEND_FTP,'
+	-DBACKEND_TYPES='"ftp", G_VFS_TYPE_BACKEND_FTP, "ftps", G_VFS_TYPE_BACKEND_FTP,'
 
 gvfsd_ftp_LDADD = $(libraries)
 
@@ -397,6 +396,7 @@ gvfsd_dnssd_SOURCES = \
 gvfsd_dnssd_CPPFLAGS = \
 	$(flags) \
 	-DBACKEND_HEADER=gvfsbackenddnssd.h \
+	-DMOUNTABLE_DBUS_NAME=org.gtk.vfs.mountpoint_dnssd \
 	-DDEFAULT_BACKEND_TYPE=dns-sd \
 	-DMAX_JOB_THREADS=1 \
 	$(AVAHI_CFLAGS) \
@@ -456,8 +456,37 @@ endif
 if USE_GUDEV
 gvfsd_cdda_LDADD = $(libraries) $(CDDA_LIBS) $(GUDEV_LIBS)
 else
-gvfsd_cdda_LDADD = $(libraries) $(CDDA_LIBS) $(HAL_LIBS)
+gvfsd_cdda_LDADD = $(libraries) $(CDDA_LIBS) $(HAL_LIBS) \
+		   $(top_builddir)/common/libgvfscommon-hal.la
 endif
+
+gvfsd_admin_SOURCES = \
+	gvfsbackendadmin.c gvfsbackendadmin.h \
+	daemon-main.c daemon-main.h \
+	daemon-main-generic.c
+
+gvfsd_admin_CPPFLAGS = \
+	$(flags) \
+	-DBACKEND_HEADER=gvfsbackendadmin.h \
+	-DDEFAULT_BACKEND_TYPE=admin \
+	-DBACKEND_TYPES='"admin", G_VFS_TYPE_BACKEND_ADMIN,' \
+	$(ADMIN_CFLAGS)
+
+gvfsd_admin_LDADD = $(libraries) $(ADMIN_LIBS)
+
+gvfsd_google_SOURCES = \
+	gvfsbackendgoogle.c gvfsbackendgoogle.h \
+	daemon-main.c daemon-main.h \
+	daemon-main-generic.c
+
+gvfsd_google_CPPFLAGS = \
+	$(flags) \
+	-DBACKEND_HEADER=gvfsbackendgoogle.h \
+	-DDEFAULT_BACKEND_TYPE=google-drive \
+	-DBACKEND_TYPES='"google-drive", G_VFS_TYPE_BACKEND_GOOGLE,' \
+	$(GOOGLE_CFLAGS)
+
+gvfsd_google_LDADD = $(libraries) $(GOOGLE_LIBS)
 
 gvfsd_gphoto2_SOURCES = \
 	gvfsbackendgphoto2.c gvfsbackendgphoto2.h \
@@ -478,9 +507,11 @@ gvfsd_gphoto2_CPPFLAGS += $(HAL_CFLAGS)
 endif
 
 if USE_GUDEV
-gvfsd_gphoto2_LDADD = $(libraries) $(GPHOTO2_LIBS) $(GUDEV_LIBS)
+gvfsd_gphoto2_LDADD = $(libraries) $(GPHOTO2_LIBS) $(GUDEV_LIBS) \
+		      $(top_builddir)/common/libgvfscommon-gphoto2.la
 else
-gvfsd_gphoto2_LDADD = $(libraries) $(GPHOTO2_LIBS) $(HAL_LIBS)
+gvfsd_gphoto2_LDADD = $(libraries) $(GPHOTO2_LIBS) $(HAL_LIBS) \
+		      $(top_builddir)/common/libgvfscommon-hal.la
 endif
 
 gvfsd_mtp_SOURCES = \
@@ -492,10 +523,12 @@ gvfsd_mtp_CPPFLAGS = \
 	$(flags) \
 	-DBACKEND_HEADER=gvfsbackendmtp.h \
 	-DDEFAULT_BACKEND_TYPE=mtp \
+	-DMAX_JOB_THREADS=1 \
 	-DBACKEND_TYPES='"mtp", G_VFS_TYPE_BACKEND_MTP,' \
 	$(GUDEV_CFLAGS) $(LIBMTP_CFLAGS)
 
-gvfsd_mtp_LDADD = $(libraries) $(GUDEV_LIBS) $(LIBMTP_LIBS)
+gvfsd_mtp_LDADD = $(libraries) $(GUDEV_LIBS) $(LIBMTP_LIBS) \
+		  $(top_builddir)/common/libgvfscommon-gphoto2.la
 
 gvfsd_http_SOURCES = \
 	gvfshttpinputstream.c gvfshttpinputstream.h \
@@ -506,7 +539,7 @@ gvfsd_http_SOURCES = \
 gvfsd_http_CPPFLAGS = \
 	$(flags) \
 	-DBACKEND_HEADER=gvfsbackendhttp.h \
-	-DMOUNTABLE_DBUS_NAME=org.gtk.vfs.mountpoint.http \
+	-DMOUNTABLE_DBUS_NAME=org.gtk.vfs.mountpoint_http \
 	-DDEFAULT_BACKEND_TYPE=http \
 	-DMAX_JOB_THREADS=1 \
 	$(HTTP_CFLAGS) \
@@ -605,6 +638,20 @@ gvfsd_afp_LDADD = \
 	$(libraries) \
 	$(LIBGCRYPT_LIBS)
 
+gvfsd_nfs_SOURCES = \
+	gvfsbackendnfs.c gvfsbackendnfs.h \
+	daemon-main.c daemon-main.h \
+	daemon-main-generic.c
+
+gvfsd_nfs_CPPFLAGS = \
+	$(flags) \
+	-DBACKEND_HEADER=gvfsbackendnfs.h \
+	-DDEFAULT_BACKEND_TYPE=nfs \
+	-DMAX_JOB_THREADS=1 \
+	-DBACKEND_TYPES='"nfs", G_VFS_TYPE_BACKEND_NFS,' \
+	$(NFS_CFLAGS)
+
+gvfsd_nfs_LDADD = $(libraries) $(NFS_LIBS)
 
 # GSettings stuff
 gsettings_ENUM_NAMESPACE = org.gnome.system.gvfs
@@ -616,3 +663,16 @@ gsettings_SCHEMAS = $(gvfs_gschemas)
 
 gvfs_gschemas_convertdir = $(datadir)/GConf/gsettings
 gvfs_gschemas_convert_DATA = $(gvfs_gschemas_convert)
+
+org.gtk.vfs.file-operations.policy.in: org.gtk.vfs.file-operations.policy.in.in Makefile
+	$(AM_V_GEN) sed -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
+
+org.gtk.vfs.file-operations.policy: org.gtk.vfs.file-operations.policy.in Makefile
+	$(AM_V_GEN) XDG_DATA_DIRS=$(top_srcdir) $(MSGFMT) --xml --template $< -d $(top_srcdir)/po -o $@ || cp $< $@
+
+gvfs_polkit_actionsdir = $(datadir)/polkit-1/actions
+gvfs_polkit_actions_in_files = org.gtk.vfs.file-operations.policy.in
+gvfs_polkit_actions_DATA = org.gtk.vfs.file-operations.policy
+
+gvfs_polkit_rulesdir = $(datadir)/polkit-1/rules.d
+dist_gvfs_polkit_rules_DATA = org.gtk.vfs.file-operations.rules

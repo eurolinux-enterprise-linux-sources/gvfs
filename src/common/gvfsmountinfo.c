@@ -481,10 +481,29 @@ bdmv_metadata_thread (GSimpleAsyncResult *result,
   char *icon;
   char *name;
   const char *lang;
+  char *path;
 
   file = G_FILE (object);
 
   disc_root = g_file_get_path (file);
+  if (!disc_root)
+    {
+      error = g_error_new_literal (G_IO_ERROR,
+                                   G_IO_ERROR_FAILED,
+                                   "Device is not a Blu-Ray disc");
+      goto error;
+    }
+
+  path = g_build_filename (disc_root, "BDMV", NULL);
+  if (!g_file_test (path, G_FILE_TEST_IS_DIR))
+    {
+      error = g_error_new_literal (G_IO_ERROR,
+                                   G_IO_ERROR_FAILED,
+                                   "Device is not a Blu-Ray disc");
+      goto error;
+    }
+  g_free (path);
+
   bd = bd_open (disc_root, NULL);
   g_free (disc_root);
 
@@ -525,7 +544,7 @@ bdmv_metadata_thread (GSimpleAsyncResult *result,
       meta = bd_get_meta (bd);
 
       if (meta != NULL && name == NULL && meta->di_name && *meta->di_name)
-        name = meta->di_name;
+        name = g_strdup (meta->di_name);
 
       if (meta != NULL && icon == NULL)
         icon = g_strdup (get_icon (meta));
@@ -545,6 +564,7 @@ bdmv_metadata_thread (GSimpleAsyncResult *result,
       g_simple_async_result_set_op_res_gpointer (result,
                                                  g_file_icon_new (icon_file),
                                                  NULL);
+      g_object_unref (icon_file);
     }
   else
     {

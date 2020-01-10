@@ -50,7 +50,7 @@
 #endif /* !G_ENABLE_DEBUG */
 
 
-/* VOID:OBJECT,STRING (hal-marshal.list:1) */
+/* VOID:OBJECT,STRING (/home/oholy/gnome/gvfs/monitor/gphoto2/hal-marshal.list:1) */
 void
 hal_marshal_VOID__OBJECT_STRING (GClosure     *closure,
                                  GValue       *return_value G_GNUC_UNUSED,
@@ -63,9 +63,9 @@ hal_marshal_VOID__OBJECT_STRING (GClosure     *closure,
                                                     gpointer     arg_1,
                                                     gpointer     arg_2,
                                                     gpointer     data2);
-  register GMarshalFunc_VOID__OBJECT_STRING callback;
-  register GCClosure *cc = (GCClosure*) closure;
-  register gpointer data1, data2;
+  GMarshalFunc_VOID__OBJECT_STRING callback;
+  GCClosure *cc = (GCClosure*) closure;
+  gpointer data1, data2;
 
   g_return_if_fail (n_param_values == 3);
 
@@ -87,7 +87,7 @@ hal_marshal_VOID__OBJECT_STRING (GClosure     *closure,
             data2);
 }
 
-/* VOID:OBJECT,STRING,STRING (hal-marshal.list:2) */
+/* VOID:OBJECT,STRING,STRING (/home/oholy/gnome/gvfs/monitor/gphoto2/hal-marshal.list:2) */
 void
 hal_marshal_VOID__OBJECT_STRING_STRING (GClosure     *closure,
                                         GValue       *return_value G_GNUC_UNUSED,
@@ -101,9 +101,9 @@ hal_marshal_VOID__OBJECT_STRING_STRING (GClosure     *closure,
                                                            gpointer     arg_2,
                                                            gpointer     arg_3,
                                                            gpointer     data2);
-  register GMarshalFunc_VOID__OBJECT_STRING_STRING callback;
-  register GCClosure *cc = (GCClosure*) closure;
-  register gpointer data1, data2;
+  GMarshalFunc_VOID__OBJECT_STRING_STRING callback;
+  GCClosure *cc = (GCClosure*) closure;
+  gpointer data1, data2;
 
   g_return_if_fail (n_param_values == 4);
 
@@ -126,7 +126,7 @@ hal_marshal_VOID__OBJECT_STRING_STRING (GClosure     *closure,
             data2);
 }
 
-/* VOID:STRING,STRING (hal-marshal.list:3) */
+/* VOID:STRING,STRING (/home/oholy/gnome/gvfs/monitor/gphoto2/hal-marshal.list:3) */
 void
 hal_marshal_VOID__STRING_STRING (GClosure     *closure,
                                  GValue       *return_value G_GNUC_UNUSED,
@@ -139,9 +139,9 @@ hal_marshal_VOID__STRING_STRING (GClosure     *closure,
                                                     gpointer     arg_1,
                                                     gpointer     arg_2,
                                                     gpointer     data2);
-  register GMarshalFunc_VOID__STRING_STRING callback;
-  register GCClosure *cc = (GCClosure*) closure;
-  register gpointer data1, data2;
+  GMarshalFunc_VOID__STRING_STRING callback;
+  GCClosure *cc = (GCClosure*) closure;
+  gpointer data1, data2;
 
   g_return_if_fail (n_param_values == 3);
 

@@ -52,6 +52,9 @@ struct _GVfsBackendMtp
   GMutex mutex;
   LIBMTP_mtpdevice_t *device;
   char *dev_path;
+  char *volume_name;
+  char *volume_icon;
+  char *volume_symbolic_icon;
 
   GHashTable *file_cache;
 
@@ -61,6 +64,15 @@ struct _GVfsBackendMtp
   gboolean force_unmounted;
 
   gboolean android_extension;
+  gboolean get_partial_object_capability;
+
+#ifdef HAVE_LIBMTP_1_1_5
+  GThreadPool *event_pool;
+#endif
+#ifdef HAVE_LIBMTP_1_1_12
+  GThread *event_thread;
+  gboolean event_completed;
+#endif
 };
 
 struct _GVfsBackendMtpClass

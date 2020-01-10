@@ -53,6 +53,7 @@
 #include "gvfsjobsetdisplayname.h"
 #include "gvfsjobmove.h"
 #include "gvfsjobcopy.h"
+#include "gvfsutils.h"
 
 #include "gvfsafpserver.h"
 #include "gvfsafpvolume.h"
@@ -1293,22 +1294,12 @@ replace_create_tmp_file_cb (GObject *source_object, GAsyncResult *res, gpointer 
 }
 
 static void
-random_chars (char *str, int len)
-{
-  int i;
-  const char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-
-  for (i = 0; i < len; i++)
-    str[i] = chars[g_random_int_range (0, strlen(chars))];
-}
-
-static void
 replace_create_tmp_file (GVfsAfpVolume *volume, GVfsJobOpenForWrite *job)
 {
   char basename[] = "~gvfXXXX.tmp";
   char *dir, *tmp_filename;
 
-  random_chars (basename + 4, 4);
+  gvfs_randomize_string (basename + 4, 4);
   dir = g_path_get_dirname (job->filename);
 
   tmp_filename = g_build_filename (dir, basename, NULL);
@@ -1829,7 +1820,7 @@ try_query_fs_info (GVfsBackend *backend,
   guint16 vol_bitmap = 0;
 
   g_file_info_set_attribute_string (info, G_FILE_ATTRIBUTE_FILESYSTEM_TYPE, "afp");
-
+  g_file_info_set_attribute_boolean (info, G_FILE_ATTRIBUTE_FILESYSTEM_REMOTE, TRUE);
   
   if (g_file_attribute_matcher_matches (matcher, G_FILE_ATTRIBUTE_FILESYSTEM_SIZE))
     vol_bitmap |= AFP_VOLUME_BITMAP_EXT_BYTES_TOTAL_BIT;

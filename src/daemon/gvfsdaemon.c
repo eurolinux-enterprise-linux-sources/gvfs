@@ -38,10 +38,12 @@
 #include <gvfsdaemon.h>
 #include <gvfsdaemonprotocol.h>
 #include <gvfsdaemonutils.h>
+#include <gvfsutils.h>
 #include <gvfsjobmount.h>
 #include <gvfsjobopenforread.h>
 #include <gvfsjobopenforwrite.h>
 #include <gvfsjobunmount.h>
+#include <gvfsmonitorimpl.h>
 
 enum {
   PROP_0
@@ -109,6 +111,9 @@ static gboolean          handle_get_connection     (GVfsDBusDaemon        *objec
 static gboolean          handle_cancel             (GVfsDBusDaemon        *object,
                                                     GDBusMethodInvocation *invocation,
                                                     guint                  arg_serial,
+                                                    gpointer               user_data);
+static gboolean          handle_list_monitor_implementations (GVfsDBusDaemon        *object,
+                                                    GDBusMethodInvocation *invocation,
                                                     gpointer               user_data);
 static gboolean          daemon_handle_mount       (GVfsDBusMountable     *object,
                                                     GDBusMethodInvocation *invocation,
@@ -264,6 +269,7 @@ g_vfs_daemon_init (GVfsDaemon *daemon)
   daemon->daemon_skeleton = gvfs_dbus_daemon_skeleton_new ();
   g_signal_connect (daemon->daemon_skeleton, "handle-get-connection", G_CALLBACK (handle_get_connection), daemon);
   g_signal_connect (daemon->daemon_skeleton, "handle-cancel", G_CALLBACK (handle_cancel), daemon);
+  g_signal_connect (daemon->daemon_skeleton, "handle-list-monitor-implementations", G_CALLBACK (handle_list_monitor_implementations), daemon);
   
   error = NULL;
   if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (daemon->daemon_skeleton),
@@ -717,18 +723,6 @@ daemon_peer_connection_setup (GVfsDaemon *daemon,
 #define USE_ABSTRACT_SOCKETS
 #endif
 
-static void
-randomize_string (char tmp[9])
-{
-  int i;
-  const char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-
-  for (i = 0; i < 8; i++)
-    tmp[i] = chars[g_random_int_range (0, strlen(chars))];
-  
-  tmp[8] = '\0';
-}
-
 #ifndef USE_ABSTRACT_SOCKETS
 static gboolean
 test_safe_socket_dir (const char *dirname)
@@ -765,7 +759,8 @@ create_socket_dir (void)
     {
       g_free (safe_dir);
 
-      randomize_string (tmp);
+      gvfs_randomize_string (tmp, 8);
+      tmp[8] = '\0';
 		
       dirname = g_strdup_printf ("gvfs-%s-%s",
 				 g_get_user_name (), tmp);
@@ -822,7 +817,8 @@ generate_address (char **address,
   {
     gchar  tmp[9];
 
-    randomize_string (tmp);
+    gvfs_randomize_string (tmp, 8);
+    tmp[8] = '\0';
     *address = g_strdup_printf ("unix:abstract=/dbus-vfs-daemon/socket-%s", tmp);
   }
 #else
@@ -947,6 +943,34 @@ handle_cancel (GVfsDBusDaemon *object,
     }
   
   gvfs_dbus_daemon_complete_cancel (object, invocation);
+
+  return TRUE;
+}
+
+static gboolean
+handle_list_monitor_implementations (GVfsDBusDaemon        *object,
+				     GDBusMethodInvocation *invocation,
+				     gpointer               user_data)
+{
+  GList *impls, *l;
+  GVariantBuilder builder;
+
+  impls = g_vfs_list_monitor_implementations ();
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ssbia{sv})"));
+
+  for (l = impls; l != NULL; l = l->next)
+    {
+      GVfsMonitorImplementation *impl = l->data;
+
+      g_variant_builder_add_value (&builder, g_vfs_monitor_implementation_to_dbus (impl));
+    }
+
+  g_list_free_full (impls, (GDestroyNotify)g_vfs_monitor_implementation_free);
+
+  gvfs_dbus_daemon_complete_list_monitor_implementations (object,
+							  invocation,
+							  g_variant_builder_end (&builder));
 
   return TRUE;
 }

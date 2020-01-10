@@ -15,6 +15,7 @@ symlinks =					\
 	gvfs-mkdir				\
 	gvfs-monitor-dir			\
 	gvfs-monitor-file			\
+	gvfs-mount                              \
 	gvfs-move				\
 	gvfs-open				\
 	gvfs-rename				\
@@ -35,6 +36,6 @@ uninstall-symlinks:
 		rm -f $(DESTDIR)$(BASHCOMP_DIR)/$$file; \
 	done
 
-install-data-local: install-symlinks
+install-data-hook: install-symlinks
 
 uninstall-local: uninstall-symlinks

@@ -1,6 +1,5 @@
 # List of source files containing translatable strings.
 # Please keep this file sorted alphabetically.
-[encoding: UTF-8]
 client/gdaemonfile.c
 client/gdaemonfileenumerator.c
 client/gdaemonfileinputstream.c
@@ -18,6 +17,7 @@ daemon/gvfsafpconnection.c
 daemon/gvfsafpserver.c
 daemon/gvfsafputils.c
 daemon/gvfsafpvolume.c
+daemon/gvfsbackendadmin.c
 daemon/gvfsbackendafc.c
 daemon/gvfsbackendafpbrowse.c
 daemon/gvfsbackendafp.c
@@ -29,12 +29,13 @@ daemon/gvfsbackendcomputer.c
 daemon/gvfsbackenddav.c
 daemon/gvfsbackenddnssd.c
 daemon/gvfsbackendftp.c
+daemon/gvfsbackendgoogle.c
 daemon/gvfsbackendgphoto2.c
 daemon/gvfsbackendhttp.c
 daemon/gvfsbackendlocaltest.c
 daemon/gvfsbackendmtp.c
 daemon/gvfsbackendnetwork.c
-daemon/gvfsbackendobexftp.c
+daemon/gvfsbackendnfs.c
 daemon/gvfsbackendrecent.c
 daemon/gvfsbackendsftp.c
 daemon/gvfsbackendsmbbrowse.c
@@ -48,6 +49,7 @@ daemon/gvfsftpconnection.c
 daemon/gvfsftpdircache.c
 daemon/gvfsftpfile.c
 daemon/gvfsftptask.c
+daemon/gvfshttpinputstream.c
 daemon/gvfsjobcloseread.c
 daemon/gvfsjobclosewrite.c
 daemon/gvfsjobcopy.c
@@ -85,6 +87,7 @@ daemon/gvfsjobunmountmountable.c
 daemon/gvfsjobwrite.c
 daemon/main.c
 daemon/mount.c
+daemon/org.gtk.vfs.file-operations.policy.in.in
 metadata/meta-daemon.c
 monitor/afc/afcvolume.c
 monitor/gdu/gdu-volume-monitor-daemon.c

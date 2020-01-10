@@ -6,7 +6,7 @@
 
 G_BEGIN_DECLS
 
-/* VOID:OBJECT,STRING (hal-marshal.list:1) */
+/* VOID:OBJECT,STRING (/home/oholy/gnome/gvfs/monitor/hal/hal-marshal.list:1) */
 extern void hal_marshal_VOID__OBJECT_STRING (GClosure     *closure,
                                              GValue       *return_value,
                                              guint         n_param_values,
@@ -14,7 +14,7 @@ extern void hal_marshal_VOID__OBJECT_STRING (GClosure     *closure,
                                              gpointer      invocation_hint,
                                              gpointer      marshal_data);
 
-/* VOID:OBJECT,STRING,STRING (hal-marshal.list:2) */
+/* VOID:OBJECT,STRING,STRING (/home/oholy/gnome/gvfs/monitor/hal/hal-marshal.list:2) */
 extern void hal_marshal_VOID__OBJECT_STRING_STRING (GClosure     *closure,
                                                     GValue       *return_value,
                                                     guint         n_param_values,
@@ -22,7 +22,7 @@ extern void hal_marshal_VOID__OBJECT_STRING_STRING (GClosure     *closure,
                                                     gpointer      invocation_hint,
                                                     gpointer      marshal_data);
 
-/* VOID:STRING,STRING (hal-marshal.list:3) */
+/* VOID:STRING,STRING (/home/oholy/gnome/gvfs/monitor/hal/hal-marshal.list:3) */
 extern void hal_marshal_VOID__STRING_STRING (GClosure     *closure,
                                              GValue       *return_value,
                                              guint         n_param_values,

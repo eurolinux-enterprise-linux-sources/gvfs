@@ -28,23 +28,39 @@ gvfs_mtp_volume_monitor_LDFLAGS =	\
 gvfs_mtp_volume_monitor_LDADD  =		     			      \
 	$(GLIB_LIBS)                                 			      \
 	$(top_builddir)/common/libgvfscommon.la 			      \
+	$(top_builddir)/common/libgvfscommon-gphoto2.la                       \
 	$(top_builddir)/monitor/proxy/libgvfsproxyvolumemonitordaemon-noin.la \
 	$(NULL)
-
-gvfs_mtp_volume_monitor_LDADD += $(GUDEV_LIBS)
 
 
 remote_volume_monitorsdir = $(datadir)/gvfs/remote-volume-monitors
 remote_volume_monitors_DATA = mtp.monitor
 
 servicedir       = $(datadir)/dbus-1/services
-service_in_files = org.gtk.Private.MTPVolumeMonitor.service.in
+service_in_files = org.gtk.vfs.MTPVolumeMonitor.service.in
 service_DATA     = $(service_in_files:.service.in=.service)
+
+systemd_user_in_files = gvfs-mtp-volume-monitor.service.in
+if USE_SYSTEMD_USER_UNITS
+systemd_user_DATA = $(systemd_user_in_files:.service.in=.service)
+endif
 
 $(service_DATA): $(service_in_files) Makefile
 	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
 
-clean-local:
-	rm -f *~ *.loT $(service_DATA)
+$(systemd_user_DATA): $(systemd_user_in_files) Makefile
+	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
 
-EXTRA_DIST = $(service_in_files) mtp.monitor
+CLEANFILES = \
+	*~ \
+	*.loT \
+	$(BUILT_SOURCES) \
+	$(service_DATA) \
+	$(systemd_user_DATA) \
+	$(NULL)
+
+EXTRA_DIST = \
+	$(service_in_files) \
+	$(systemd_user_in_files) \
+	$(remote_volume_monitors_DATA) \
+	$(NULL)

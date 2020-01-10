@@ -40,6 +40,7 @@
 #include <glib/gi18n-lib.h>
 #include <glib/gstdio.h>
 #include <gvfsdbus.h>
+#include "gvfsutils.h"
 
 typedef struct  {
   char *type;
@@ -75,9 +76,6 @@ struct _GDaemonVfsClass
 G_DEFINE_DYNAMIC_TYPE (GDaemonVfs, g_daemon_vfs, G_TYPE_VFS)
 
 static GDaemonVfs *the_vfs = NULL;
-
-G_LOCK_DEFINE_STATIC (metadata_proxy);
-static GVfsMetadata *metadata_proxy = NULL;
 
 G_LOCK_DEFINE_STATIC(mount_cache);
 
@@ -578,7 +576,7 @@ create_mount_tracker_proxy ()
                                                           &error);
   if (proxy == NULL)
     {
-      g_printerr ("Error creating proxy: %s (%s, %d)\n",
+      g_warning ("Error creating proxy: %s (%s, %d)\n",
                   error->message, g_quark_to_string (error->domain), error->code);
       g_error_free (error);
     }
@@ -602,7 +600,8 @@ fill_mountable_info (GDaemonVfs *vfs)
   gboolean host_is_inet;
   
   proxy = create_mount_tracker_proxy ();
-  g_return_if_fail (proxy != NULL);
+  if (proxy == NULL)
+    return;
 
   error = NULL;
   if (!gvfs_dbus_mount_tracker_call_list_mountable_info_sync (proxy, 
@@ -610,12 +609,8 @@ fill_mountable_info (GDaemonVfs *vfs)
                                                               NULL,
                                                               &error))
     {
-      /* Don't warn if we're running a new gvfs plugin against an old gvfs-daemon,
-       * as happens in jhbuild.
-       */
-      if (!g_error_matches (error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD))
-	g_printerr ("org.gtk.vfs.MountTracker.listMountableInfo call failed: %s (%s, %d)\n",
-		    error->message, g_quark_to_string (error->domain), error->code);
+      g_debug ("org.gtk.vfs.MountTracker.listMountableInfo call failed: %s (%s, %d)\n",
+               error->message, g_quark_to_string (error->domain), error->code);
       g_error_free (error);
       g_object_unref (proxy);
       return;
@@ -708,8 +703,7 @@ lookup_mount_info_in_cache (GMountSpec *spec,
 }
 
 static GMountInfo *
-lookup_mount_info_by_fuse_path_in_cache (const char *fuse_path,
-					 char **mount_path)
+lookup_mount_info_by_fuse_path_in_cache (const char *fuse_path)
 {
   GMountInfo *info;
   GList *l;
@@ -722,19 +716,16 @@ lookup_mount_info_by_fuse_path_in_cache (const char *fuse_path,
 
       if (mount_info->fuse_mountpoint != NULL &&
 	  g_str_has_prefix (fuse_path, mount_info->fuse_mountpoint))
-	{
-	  int len = strlen (mount_info->fuse_mountpoint);
-	  if (fuse_path[len] == 0 ||
-	      fuse_path[len] == '/')
-	    {
-	      if (fuse_path[len] == 0)
-		*mount_path = g_strdup ("/");
-	      else
-		*mount_path = g_strdup (fuse_path + len);
-	      info = g_mount_info_ref (mount_info);
-	      break;
-	    }
-	}
+        {
+          int len = strlen (mount_info->fuse_mountpoint);
+          /* empty path always matches. Also check if we have a path
+           * not two paths that accidently share the same prefix */
+          if (fuse_path[len] == 0 || fuse_path[len] == '/')
+            {
+              info = g_mount_info_ref (mount_info);
+              break;
+            }
+        }
     }
   G_UNLOCK (mount_cache);
 
@@ -956,7 +947,8 @@ _g_daemon_vfs_get_mount_info_sync (GMountSpec *spec,
     return info;
   
   proxy = create_mount_tracker_proxy ();
-  g_return_val_if_fail (proxy != NULL, NULL);
+  if (proxy == NULL)
+    return NULL;
   
   if (gvfs_dbus_mount_tracker_call_lookup_mount_sync (proxy,
                                                       g_mount_spec_to_dbus_with_path (spec, path),
@@ -980,27 +972,27 @@ _g_daemon_vfs_get_mount_info_by_fuse_sync (const char *fuse_path,
   GMountInfo *info;
   int len;
   const char *mount_path_end;
-  GVfsDBusMountTracker *proxy;
+  GVfsDBusMountTracker *proxy = NULL;
   GVariant *iter_mount;
 
-  info = lookup_mount_info_by_fuse_path_in_cache (fuse_path,
-						  mount_path);
-  if (info != NULL)
-    return info;
-  
-  proxy = create_mount_tracker_proxy ();
-  g_return_val_if_fail (proxy != NULL, NULL);
-  
-  if (gvfs_dbus_mount_tracker_call_lookup_mount_by_fuse_path_sync (proxy,
-                                                                   fuse_path,
-                                                                   &iter_mount,
-                                                                   NULL,
-                                                                   NULL))
+  info = lookup_mount_info_by_fuse_path_in_cache (fuse_path);
+  if (!info)
     {
-      info = handler_lookup_mount_reply (iter_mount, NULL);
-      g_variant_unref (iter_mount);
+      proxy = create_mount_tracker_proxy ();
+      if (proxy == NULL)
+        return NULL;
+
+      if (gvfs_dbus_mount_tracker_call_lookup_mount_by_fuse_path_sync (proxy,
+                                                                       fuse_path,
+                                                                       &iter_mount,
+                                                                       NULL,
+                                                                       NULL))
+        {
+          info = handler_lookup_mount_reply (iter_mount, NULL);
+          g_variant_unref (iter_mount);
+        }
     }
-  
+
   if (info)
     {
       if (info->fuse_mountpoint)
@@ -1023,7 +1015,7 @@ _g_daemon_vfs_get_mount_info_by_fuse_sync (const char *fuse_path,
 	}
     }
 
-  g_object_unref (proxy);
+  g_clear_object (&proxy);
 
   return info;
 }
@@ -1192,7 +1184,7 @@ _g_daemon_vfs_append_metadata_for_set (GVariantBuilder *builder,
     {
       if (meta_tree_lookup_key_type (tree, path, key) != META_KEY_TYPE_NONE)
 	{
-	  char c = 0;
+	  unsigned char c = 0;
 	  res = 1;
 	  /* Byte => unset */
 	  g_variant_builder_add (builder, "{sv}", key, g_variant_new_byte (c));
@@ -1202,31 +1194,6 @@ _g_daemon_vfs_append_metadata_for_set (GVariantBuilder *builder,
     res = -1;
 
   return res;
-}
-
-GVfsMetadata *
-_g_daemon_vfs_get_metadata_proxy (GCancellable *cancellable, GError **error)
-{
-  GVfsMetadata *proxy;
-
-  G_LOCK (metadata_proxy);
-
-  proxy = NULL;
-  if (metadata_proxy == NULL)
-    {
-      metadata_proxy = gvfs_metadata_proxy_new_for_bus_sync (G_BUS_TYPE_SESSION,
-                                                             G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS | G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
-                                                             G_VFS_DBUS_METADATA_NAME,
-                                                             G_VFS_DBUS_METADATA_PATH,
-                                                             cancellable,
-                                                             error);
-    }
-
-  proxy = metadata_proxy;
-
-  G_UNLOCK (metadata_proxy);
-
-  return proxy;
 }
 
 static gboolean
@@ -1290,9 +1257,12 @@ g_daemon_vfs_local_file_set_attributes (GVfs       *vfs,
             }
           else
             {
-	      proxy = _g_daemon_vfs_get_metadata_proxy (NULL, error);
+	      proxy = meta_tree_get_metadata_proxy ();
 	      if (proxy == NULL)
 		{
+		  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+			       _("Error setting file metadata: %s"),
+			       _("can't get metadata proxy"));
 		  res = FALSE;
 		  error = NULL; /* Don't set further errors */
 		}
@@ -1382,20 +1352,15 @@ g_daemon_vfs_local_file_removed (GVfs       *vfs,
 					&tree_path);
   if (tree)
     {
-      proxy = _g_daemon_vfs_get_metadata_proxy (NULL, NULL);
+      proxy = meta_tree_get_metadata_proxy ();
       if (proxy)
         {
           metatreefile = meta_tree_get_filename (tree);
-          /* we don't care about the result, let's queue the call and don't block */
-          gvfs_metadata_call_remove (proxy,
-                                     metatreefile,
-                                     tree_path,
-                                     NULL,
-                                     NULL, /* callback */
-                                     NULL);
-          /* flush the call with the expense of sending all queued messages on the connection */
-          g_dbus_connection_flush_sync (g_dbus_proxy_get_connection (G_DBUS_PROXY (proxy)),
-                                        NULL, NULL);
+          gvfs_metadata_call_remove_sync (proxy,
+                                          metatreefile,
+                                          tree_path,
+                                          NULL,
+                                          NULL);
         }
       
       meta_tree_unref (tree);
@@ -1429,21 +1394,16 @@ g_daemon_vfs_local_file_moved (GVfs       *vfs,
 					 &tree_path2);
   if (tree1 && tree2 && tree1 == tree2)
     {
-      proxy = _g_daemon_vfs_get_metadata_proxy (NULL, NULL);
+      proxy = meta_tree_get_metadata_proxy ();
       if (proxy)
         {
           metatreefile = meta_tree_get_filename (tree1);
-          /* we don't care about the result, let's queue the call and don't block */
-          gvfs_metadata_call_move (proxy,
-                                   metatreefile,
-                                   tree_path1,
-                                   tree_path2,
-                                   NULL,
-                                   NULL, /* callback */
-                                   NULL);
-          /* flush the call with the expense of sending all queued messages on the connection */
-          g_dbus_connection_flush_sync (g_dbus_proxy_get_connection (G_DBUS_PROXY (proxy)),
-                                        NULL, NULL);
+          gvfs_metadata_call_move_sync (proxy,
+                                        metatreefile,
+                                        tree_path1,
+                                        tree_path2,
+                                        NULL,
+                                        NULL);
         }
     }
 
@@ -1479,7 +1439,7 @@ static gboolean
 g_daemon_vfs_is_active (GVfs *vfs)
 {
   GDaemonVfs *daemon_vfs = G_DAEMON_VFS (vfs);
-  return daemon_vfs->async_bus != NULL;
+  return (daemon_vfs->async_bus != NULL) && (daemon_vfs->supported_uri_schemes != NULL);
 }
 
 static void
@@ -1527,7 +1487,7 @@ g_io_module_load (GIOModule *module)
    * without spawning private dbus instances.
    * See bug 526454.
    */
-  if (g_getenv ("DBUS_SESSION_BUS_ADDRESS") == NULL) 
+  if (!gvfs_have_session_bus ())
     return;
 
   /* Make this module resident so that we ground the common

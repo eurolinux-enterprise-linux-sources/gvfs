@@ -1,24 +1,301 @@
-Major changes in 1.22.4
+Major changes in 1.30.4
 =======================
-* ftp: Prevent segfault when unmounting
-* ftp: Bug fixes for directory parsing
-* afc: Fix force unmount when device is removed
-* programs: Fix bash completion
-* mtp: Fix query_fs_info crashes when file not found
-* Several smaller bugfixes
-* Translation updates (add Bosnian translation)
+* common: Fix potential crash caused by missing g_strdup
+* fuse: Prevent potential crash if file handle is not set
+* sftp: Prevent potential crash in case of parsing error
+* google: Prevent potential crashes if resolve_dir fails
+* gphoto2: Fix x-content-types setup
+* google: Fix reported file size
+* sftp: Limit writes to 32768 bytes
+* daemon: Bump maximum read channel buffer size
 
-Major changes in 1.22.3
+Major changes in 1.30.3
 =======================
-* Fix metadata deamon crashes
-* Several improvements to unmounting reliability
+* recent: Fix crashes when DISPLAY is not set
+* metadata: Various performance improvements
+* dnssd: Fix crashes and leaks when mount fails
+* network: Fix crashes when mount fails
+* udisks2: Fix misleading notification when unmounting
+* smb: Fix IPv6 uri handling
+
+Major changes in 1.30.2
+=========================
+* trash: Do not crash if home mount isn't found
+* admin: Fix polkit errors caused by redundant translations
+* Translation updates
+
+Major changes in 1.30.1.1
+=========================
+* Revert udisks2 patches causing unwanted regressions
+
+Major changes in 1.30.1
+=======================
+* udisks2: Fix handling of volumes with multiple mountpoints
+* udisks2: Filter out system mounts
+* Translation updates
+
+Major changes in 1.30.0
+=======================
+* Translation updates
+
+Major changes in 1.29.92
+========================
 * Several smaller bugfixes
 * Translation updates
 
-Major changes in 1.22.2
+Major changes in 1.29.91
+========================
+* dav: Various mount operation fixes
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.29.90
+========================
+* build: Use upstream gettext instead intltool
+* build: Use autoreconf instead custom script
+* dnssd: Fix crashes when mount failed
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.29.4
 =======================
+* Introduce an admin gvfs backend based on polkit
+* gvfs-open: Fix spawning of applications with dashses in their app IDs
+* daemon: Fix crashes caused by NULL certificates
+* daemon: Set G_FILE_ATTRIBUTE_FILESYSTEM_REMOTE attribute
+* Several smaller bugfixes and improvements
+* Translation updates
+
+Major changes in 1.29.3
+=======================
+* afc: Many improvements and fixes for iOS support 
+* fuse: Add possibility to enable debug output
+* test: Skip tests if dependencies are missing
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.29.2
+=======================
+* client: Fix missing mount prefix in cached fuse paths
+* monitor: Add g_drive_is_removable() support
+* dav: Fix IPv6 address handling
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.29.1
+=======================
+* udisks2: Fix crashes when mounting encrypted volume
+* mtp: Refactor event handling in order to fix unmount crashes
+* Several smaller bugfixes
+
+Major changes in 1.28.1
+=======================
+* udisks2: Abort mount operation if volume is unlocked
+* udisks2: Lock unlocked volumes on eject/stop
+* trash: Check modification time to avoid rereading
+* trash: Rescan trash dirs before operations with files
+* Translation updates
+
+Major changes in 1.28.0
+=======================
+* afc: Several fixes for recent iOS versions
+* Translation updates
+
+Major changes in 1.27.92
+========================
+* fuse: Avoid crashes when exiting
+* Translation updates
+
+Major changes in 1.27.91
+========================
+* udisks2: Send unmount notification only once when stopping
+* Translation updates
+
+Major changes in 1.27.90
+========================
+* udisks2: Avoid crashes during unmount
+* ftp: Fix cache invalidation after writing
+* network: Fix crashes when mount failed
+* mtp: Allow reading on more devices
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.27.4
+=======================
+* dns-sd: Add support for nfs shares
+* Do not print anything from daemons unless debug mode is enabled
+* Several other logging improvements
+* Translation updates
+
+Major changes in 1.27.3
+=======================
+* sftp: Fail cancelled jobs
+* metadata: Avoid endless recursion when copying meta files
+* mtp: Use phone icon for MTP devices
+* udisks2: Do not show notification if unmount failed
+* completion: Allow bash completion for gvfs-mount
+* http: Return error if seek was not successful
+* sftp: Handle "Too many authentication failures" error
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.26.2
+=======================
+* Accept XDG_RUNTIME_DIR/bus as a valid D-Bus session/user bus
+* google: Fail in-fs copy/move if it leads to display name loss
+* google: Mark files you can't see on the web as hidden
+* Translation updates
+
+Major changes in 1.26.1.1
+=========================
+* file monitor: Fix crashes caused by invalid read
+
+Major changes in 1.26.1
+=======================
+* proxyvolumemonitor: Fix crashes when drives/volumes/mounts caches are changed
+* Add a corresponding systemd user service for every D-Bus session service
+* google: Report progress when copying and moving
+* ftp: Return correct file info for absolute symlink paths
+* sftp: Fix crashes when force unmount is proceeded
+* sftp: Fix crashes when data connection setup failed
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.26.0
+=======================
+* Translation updates
+
+Major changes in 1.25.92
+========================
+* Add Google Drive backend based on libgdata
+* Make all gvfs daemons own a name under org.gtk.vfs.*
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.25.91
+========================
+* afp: Change g_error to g_warning for read errors to prevent crash reports
+* dav: Mark files as untrashable to offer correct action in Nautilus
+* gdaemonfile: Fix cancelling of g_file_mount_enclosing_volume
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.25.90
+========================
+* Several bash-completion fixes and improvements
+* mtp: Return ENOTEMPTY if trying to delete a non-empty directory
+* Set filesystem::type for all backends
+* build: Make EXTRA_DIST independent of configure results
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.25.4.1
+=========================
+* monitor: Fix memory leak
+
+Major changes in 1.25.4
+=======================
+* udisks2: Fix a crash when unmounting
+* udisks2: Handle libsecret errors properly to avoid a crash
+* afc: Fix a crash when unmounting and unplugging
+* cdda: Use UTF-8 with libcdio >= 0.84
+* Translation updates
+
+Major changes in 1.25.3
+=======================
+* common: Fix crashes with blank disks
+* gvfs-open: Fix launching applications over d-bus
+* monitor: Show notification always when device is unmounted
+* sftp: Use separate data connection for pulling and pushing data
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.25.2
+=======================
+* gvfs-open: Do not alter uris before use
+* mtp: Refresh storage information in query_info
+* dav: Emit progress callbacks when copying and moving
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.25.1
+=======================
+* dav: Verify TLS certificates
+* ftp: Use TCP_NODELAY
+* ftp: Implement TLS support
+* sftp: Handle host key / IP mismatch
+* Several smaller bugfixes
+
+Major changes in 1.24.1
+=======================
+* hal: Fix compilation error and memory leak
+* Translation updates
+
+Major changes in 1.24.0
+=======================
+* Fix g-ir-compiler failures
+* Translation updates
+
+Major changes in 1.23.92
+========================
+* Remove obsolete obexftp code
+* metadata: Reliability improvements
+* afc, gphoto2: Fix force unmount when device is removed
+* ftp: Prevent segfault when unmounting
+* ftp: Bug fixes for directory parsing
+* dav: Fix crash on mount when using dns-sd
+* common: Increase mount timeout to 30 minutes
+* Several smaller bugfixes
+* Update man pages
+* Translation updates
+
+Major changes in 1.23.90
+========================
+* ftp: Implement backups for replace
+* Add an nfs backend based on libnfs
+* test: Various improvements and fixes
+* ftp: Implement G_FILE_COPY_NOFOLLOW_SYMLINKS
+* programs: Fix bash completion
+* dav: Add support for server-side copying
+* mtp: Set MTP filetype from mime type when uploading files
+* gvfs-mount: Allow mounting as an anonymous user
+* smb: Handle the anonymous flag
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.23.4
+=======================
+* gproxymount: Fix crashes if eject callback isn't specified
+* metadata: Fix crashes if tree initilization failed
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.23.3
+=======================
+* Fix reported size for http and dav
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.23.2
+=======================
+* Try copy and delete fallback for move if backup couldn't be created
+* mtp: Do not crash when device is unplugged
+* tests: Several fixes
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.23.1
+=======================
+* Several improvements to unmounting reliability
+* fuse: Several fixes to prevent data corruption and improve stat() results
+* Improve root dir name and icon handling for gphoto2 and mtp
+* Add bash completion support for gvfs-rename and gvfs-set-attribute
+* client: Check for G_FILE_COPY_NO_FALLBACK_FOR_MOVE when push/pulling
+* Add -C flag to gvfs-move
+* sftp: Don't spin during connection
 * sftp: Correctly retrieve the username from the secret store
-* mtp: Fix crashes when device is unplugged
+* goa: Pass "password" as ID when fetching the password
+* tests: Some cleanups and reliability fixes
 * Several smaller bugfixes
 * Translation updates
 

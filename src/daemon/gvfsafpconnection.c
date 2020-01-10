@@ -1074,7 +1074,8 @@ read_data_cb (GObject *object, GAsyncResult *res, gpointer user_data)
   result = read_all_finish (input, res, NULL, &err);
   if (!result)
   {
-    if (g_error_matches (err, G_IO_ERROR, G_IO_ERROR_CLOSED))
+    if (g_error_matches (err, G_IO_ERROR, G_IO_ERROR_CLOSED) ||
+        g_error_matches (err, G_IO_ERROR, G_IO_ERROR_CONNECTION_CLOSED))
     {
       g_message (_("Host closed connection"));
     }
@@ -1115,7 +1116,8 @@ read_dsi_header_cb (GObject *object, GAsyncResult *res, gpointer user_data)
   result = read_all_finish (input, res, NULL, &err);
   if (!result)
   {
-    if (g_error_matches (err, G_IO_ERROR, G_IO_ERROR_CLOSED))
+    if (g_error_matches (err, G_IO_ERROR, G_IO_ERROR_CLOSED) ||
+        g_error_matches (err, G_IO_ERROR, G_IO_ERROR_CONNECTION_CLOSED))
     {
       g_message (_("Host closed connection"));
     }
@@ -1607,7 +1609,7 @@ read_reply_sync (GInputStream      *input,
   {
     g_free (*data);
     g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                         _("Got EOS"));
+                         _("Got unexpected end of stream"));
     return FALSE;
   }
 

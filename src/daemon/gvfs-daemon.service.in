@@ -1,3 +1,7 @@
-[D-BUS Service]
-Name=org.gtk.vfs.Daemon
-Exec=@libexecdir@/gvfsd
+[Unit]
+Description=Virtual filesystem service
+
+[Service]
+ExecStart=@libexecdir@/gvfsd
+Type=dbus
+BusName=org.gtk.vfs.Daemon

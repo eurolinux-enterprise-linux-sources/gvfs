@@ -47,14 +47,6 @@
 #define MOUNT_ICON_NAME "drive-removable-media"
 #define MOUNT_SYMBOLIC_ICON_NAME "drive-removable-media-symbolic"
 
-/* #define PRINT_DEBUG  */
-
-#ifdef PRINT_DEBUG
-#define DEBUG g_print
-#else
-#define DEBUG(...)
-#endif
-
 /*** TYPE DEFINITIONS ***/
 
 typedef struct _ArchiveFile ArchiveFile;
@@ -97,7 +89,7 @@ gvfs_archive_open (struct archive *archive,
 {
   GVfsArchive *d = data;
 
-  DEBUG ("OPEN\n");
+  g_debug ("OPEN\n");
   g_assert (d->stream == NULL);
   d->stream = g_file_read (d->file,
 			   d->job->cancellable,
@@ -120,7 +112,7 @@ gvfs_archive_read (struct archive *archive,
 				    d->job->cancellable,
 				    &d->error);
 
-  DEBUG ("READ %d\n", (int) read_bytes);
+  g_debug ("READ %d\n", (int) read_bytes);
   return read_bytes;
 }
 
@@ -145,7 +137,7 @@ gvfs_archive_skip (struct archive *archive,
       g_clear_error (&d->error);
       request = 0;
     }
-  DEBUG ("SEEK %d (%d)\n", (int) request,
+  g_debug ("SEEK %d (%d)\n", (int) request,
       (int) g_seekable_tell (G_SEEKABLE (d->stream)));
 
   return request;
@@ -157,7 +149,7 @@ gvfs_archive_close (struct archive *archive,
 {
   GVfsArchive *d = data;
 
-  DEBUG ("CLOSE\n");
+  g_debug ("CLOSE\n");
   if (!d->stream)
     g_vfs_backend_force_unmount (G_VFS_BACKEND (d->backend));
   g_clear_object (&d->stream);
@@ -190,7 +182,7 @@ gvfs_archive_pop_job (GVfsArchive *archive)
   if (archive->job == NULL)
     return;
 
-  DEBUG ("popping job %s\n", G_OBJECT_TYPE_NAME (archive->job));
+  g_debug ("popping job %s\n", G_OBJECT_TYPE_NAME (archive->job));
   if (archive->error)
     {
       g_vfs_job_failed_from_error (archive->job, archive->error);
@@ -307,7 +299,7 @@ archive_file_get_from_path (ArchiveFile *file, const char *filename, gboolean ad
 
   names = g_strsplit (filename, "/", -1);
 
-  DEBUG ("%s %s\n", add ? "add" : "find", filename);
+  g_debug ("%s %s\n", add ? "add" : "find", filename);
   for (i = 0; file && names[i] != NULL; i++)
     {
       cur = NULL;
@@ -320,7 +312,7 @@ archive_file_get_from_path (ArchiveFile *file, const char *filename, gboolean ad
 	}
       if (cur == NULL && add != FALSE)
 	{
-	  DEBUG ("adding node %s to %s\n", names[i], file->name);
+          g_debug ("adding node %s to %s\n", names[i], file->name);
           cur = g_slice_new0 (ArchiveFile);
           cur->name = g_strdup (names[i]);
           file->children = g_slist_prepend (file->children, cur);
@@ -351,9 +343,10 @@ create_root_file (GVfsBackendArchive *ba)
 
   g_file_info_set_name (info, "/");
   s = g_file_get_basename (ba->file);
-  /* FIXME: this should really be "/ in %s", but can't change
-     due to string freeze. */
-  display_name = g_strdup_printf (_("/ on %s"), s);
+
+  /* Translators: This is the name of the root in a mounted archive file,
+     e.g. "/ in archive.tar.gz" for a file with the name "archive.tar.gz" */
+  display_name = g_strdup_printf (_("/ in %s"), s);
   g_free (s);
   g_file_info_set_display_name (info, display_name);
   g_free (display_name);
@@ -382,28 +375,36 @@ static int64_t
 archive_entry_determine_size (GVfsArchive          *archive,
 			      struct archive_entry *entry)
 {
-  size_t read, size = 0;
+  size_t read;
   int result;
   const void *block;
-  int64_t offset;
+  int64_t offset, size = 0;
 
   do
     {
       result = archive_read_data_block (archive->archive, &block, &read, &offset);
-      if (result >= ARCHIVE_WARN && result <= ARCHIVE_OK)
+      if (result >= ARCHIVE_FAILED && result <= ARCHIVE_OK)
 	{
 	  if (result < ARCHIVE_OK) {
-	    DEBUG ("archive_read_data_block: result = %d, error = '%s'\n", result, archive_error_string (archive->archive));
+            g_debug ("archive_read_data_block: result = %d, error = '%s'\n", result, archive_error_string (archive->archive));
 	    archive_set_error (archive->archive, ARCHIVE_OK, "No error");
 	    archive_clear_error (archive->archive);
             if (result == ARCHIVE_RETRY)
               continue;
+
+	    /* We don't want to fail the mount job, just because of unknown file
+	     * size (e.g. caused by unsupported archive encryption). */
+	    if (result < ARCHIVE_WARN)
+	      {
+	        size = -1;
+	        break;
+	      }
 	  }
 
 	  size += read;
 	}
     }
-  while (result != ARCHIVE_FATAL && result != ARCHIVE_EOF);
+  while (result >= ARCHIVE_FAILED && result != ARCHIVE_EOF);
 
   if (result == ARCHIVE_FATAL)
     gvfs_archive_set_error_from_errno (archive);
@@ -423,7 +424,7 @@ archive_file_set_info_from_entry (GVfsArchive *         archive,
   int64_t size;
   file->info = info;
 
-  DEBUG ("setting up %s (%s)\n", archive_entry_pathname (entry), file->name);
+  g_debug ("setting up %s (%s)\n", archive_entry_pathname (entry), file->name);
 
   g_file_info_set_attribute_uint64 (info,
 				    G_FILE_ATTRIBUTE_TIME_ACCESS,
@@ -480,7 +481,9 @@ archive_file_set_info_from_entry (GVfsArchive *         archive,
     {
       size = archive_entry_determine_size (archive, entry);
     }
-  g_file_info_set_size (info, size);
+
+  if (size >= 0)
+    g_file_info_set_size (info, size);
 
   if (file->name[0] == '.')
     g_file_info_set_is_hidden (info, TRUE);
@@ -563,7 +566,7 @@ create_file_tree (GVfsBackendArchive *ba, GVfsJob *job)
           char *path;
 
   	  if (result < ARCHIVE_OK) {
-  	    DEBUG ("archive_read_next_header: result = %d, error = '%s'\n", result, archive_error_string (archive->archive));
+            g_debug ("archive_read_next_header: result = %d, error = '%s'\n", result, archive_error_string (archive->archive));
   	    archive_set_error (archive->archive, ARCHIVE_OK, "No error");
   	    archive_clear_error (archive->archive);
             if (result == ARCHIVE_RETRY)
@@ -583,9 +586,9 @@ create_file_tree (GVfsBackendArchive *ba, GVfsJob *job)
 	  entry_index++;
 	}
     }
-  while (result != ARCHIVE_FATAL && result != ARCHIVE_EOF && !gvfs_archive_in_error (archive));
+  while (result >= ARCHIVE_WARN && result != ARCHIVE_EOF && !gvfs_archive_in_error (archive));
 
-  if (result == ARCHIVE_FATAL)
+  if (result < ARCHIVE_WARN)
     gvfs_archive_set_error_from_errno (archive);
   fixup_dirs (ba->files);
   
@@ -642,7 +645,7 @@ do_mount (GVfsBackend *backend,
   else
     archive->file = g_file_new_for_commandline_arg (file);
   
-  DEBUG ("Trying to mount %s\n", g_file_get_uri (archive->file));
+  g_debug ("Trying to mount %s\n", g_file_get_uri (archive->file));
 
   info = g_file_query_info (archive->file,
 			    "*",
@@ -668,7 +671,7 @@ do_mount (GVfsBackend *backend,
   /* FIXME: check if this file is an archive */
   
   filename = g_file_get_uri (archive->file);
-  DEBUG ("mounted %s\n", filename);
+  g_debug ("mounted %s\n", filename);
   s = g_uri_escape_string (filename, NULL, FALSE);
   g_free (filename);
   mount_spec = g_mount_spec_new ("archive");
@@ -751,7 +754,7 @@ do_open_for_read (GVfsBackend *       backend,
       if (result >= ARCHIVE_WARN && result <= ARCHIVE_OK)
         {
 	  if (result < ARCHIVE_OK) {
-	    DEBUG ("do_open_for_read: result = %d, error = '%s'\n", result, archive_error_string (archive->archive));
+            g_debug ("do_open_for_read: result = %d, error = '%s'\n", result, archive_error_string (archive->archive));
 	    archive_set_error (archive->archive, ARCHIVE_OK, "No error");
 	    archive_clear_error (archive->archive);
             if (result == ARCHIVE_RETRY)
@@ -776,7 +779,10 @@ do_open_for_read (GVfsBackend *       backend,
           g_free (entry_pathname);
         }
     }
-  while (result != ARCHIVE_FATAL && result != ARCHIVE_EOF);
+  while (result >= ARCHIVE_WARN && result != ARCHIVE_EOF);
+
+  if (result < ARCHIVE_WARN)
+    gvfs_archive_set_error_from_errno (archive);
 
   if (!gvfs_archive_in_error (archive))
     {
@@ -900,6 +906,8 @@ try_query_fs_info (GVfsBackend *backend,
 {
   GVfsBackendArchive *ba = G_VFS_BACKEND_ARCHIVE (backend);
 
+  g_file_info_set_attribute_string (info, G_FILE_ATTRIBUTE_FILESYSTEM_TYPE, "archive");
+  g_file_info_set_attribute_boolean (info, G_FILE_ATTRIBUTE_FILESYSTEM_REMOTE, FALSE);
   g_file_info_set_attribute_boolean (info, G_FILE_ATTRIBUTE_FILESYSTEM_READONLY, TRUE);
   g_file_info_set_attribute_uint32 (info, G_FILE_ATTRIBUTE_FILESYSTEM_USE_PREVIEW, G_FILESYSTEM_PREVIEW_TYPE_IF_LOCAL);
   g_file_info_set_attribute_uint64 (info, G_FILE_ATTRIBUTE_FILESYSTEM_SIZE, ba->size);

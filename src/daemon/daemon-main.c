@@ -33,11 +33,11 @@
 #include <gvfsdaemon.h>
 #include <gvfsbackend.h>
 #include <gvfsdbus.h>
+#include <gvfsutils.h>
 
 static char *spawner_id = NULL;
 static char *spawner_path = NULL;
 
-static gboolean print_debug = FALSE;
 static gboolean already_acquired = FALSE;
 static int process_result = 0;
 
@@ -50,7 +50,7 @@ log_debug (const gchar   *log_domain,
 	   const gchar   *message,
 	   gpointer	      unused_data)
 {
-  if (print_debug)
+  if (gvfs_get_debug ())
     g_print ("%s", message);
 }
 
@@ -67,6 +67,8 @@ daemon_init (void)
   textdomain (GETTEXT_PACKAGE);
   
   g_log_set_handler (NULL, G_LOG_LEVEL_DEBUG, log_debug, NULL);
+
+  gvfs_setup_debug_handler ();
 
 #ifdef SIGPIPE
   /* Ignore SIGPIPE to avoid killing daemons on cancelled transfer *
@@ -217,13 +219,13 @@ daemon_parse_args (int argc, char *argv[], const char *default_type)
 
   if (argc > 1 && strcmp (argv[1], "--debug") == 0)
     {
-      print_debug = TRUE;
+      gvfs_set_debug (TRUE);
       argc--;
       argv++;
     }
   else if (g_getenv ("GVFS_DEBUG"))
     {
-      print_debug = TRUE;
+      gvfs_set_debug (TRUE);
     }
   
   mount_spec = NULL;
@@ -343,13 +345,6 @@ on_name_acquired (GDBusConnection *connection,
   send_spawned (TRUE, NULL, 0, spawned_succeeded_cb, data);
 }
 
-static gboolean
-do_name_acquired (gpointer user_data)
-{
-  on_name_acquired (NULL, NULL, user_data);
-  return FALSE;
-}
-
 void
 daemon_main (int argc,
 	     char *argv[],
@@ -386,21 +381,19 @@ daemon_main (int argc,
   loop = g_main_loop_new (NULL, FALSE);
   
   name_owner_id = 0;
-  if (mountable_name)
-    {
-      name_owner_id = g_bus_own_name (G_BUS_TYPE_SESSION,
-                                      mountable_name,
-                                      G_BUS_NAME_OWNER_FLAGS_NONE,
-                                      NULL,
-                                      on_name_acquired,
-                                      on_name_lost,
-                                      data,
-                                      NULL);
-    }
-  else
-    {
-      g_idle_add (do_name_acquired, data);
-    }
+  /* We want to own *some* name on the org.gtk.vfs.* namespace so that
+     filtering for us works from a sandbox */
+  if (data->mountable_name == NULL)
+    data->mountable_name = g_strdup_printf ("org.gtk.vfs.mountpoint_%d", getpid ());
+
+  name_owner_id = g_bus_own_name (G_BUS_TYPE_SESSION,
+                                  data->mountable_name,
+                                  G_BUS_NAME_OWNER_FLAGS_NONE,
+                                  NULL,
+                                  on_name_acquired,
+                                  on_name_lost,
+                                  data,
+                                  NULL);
 
   g_main_loop_run (loop);
   

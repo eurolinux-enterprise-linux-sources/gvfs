@@ -58,9 +58,15 @@ gvfs_gphoto2_volume_monitor_LDADD  =		     			      \
 	$(NULL)
 
 if USE_GUDEV
-gvfs_gphoto2_volume_monitor_LDADD += $(GUDEV_LIBS)
+gvfs_gphoto2_volume_monitor_LDADD +=                                          \
+	$(GUDEV_LIBS)                                                         \
+	$(top_builddir)/common/libgvfscommon-gphoto2.la                       \
+	$(NULL)
 else
-gvfs_gphoto2_volume_monitor_LDADD += $(HAL_LIBS)
+gvfs_gphoto2_volume_monitor_LDADD +=                                          \
+	$(HAL_LIBS)                                                          \
+	$(top_builddir)/common/libgvfscommon-hal.la                          \
+	$(NULL)
 endif
 
 
@@ -68,13 +74,31 @@ remote_volume_monitorsdir = $(datadir)/gvfs/remote-volume-monitors
 remote_volume_monitors_DATA = gphoto2.monitor
 
 servicedir       = $(datadir)/dbus-1/services
-service_in_files = org.gtk.Private.GPhoto2VolumeMonitor.service.in
+service_in_files = org.gtk.vfs.GPhoto2VolumeMonitor.service.in
 service_DATA     = $(service_in_files:.service.in=.service)
+
+systemd_user_in_files = gvfs-gphoto2-volume-monitor.service.in
+if USE_SYSTEMD_USER_UNITS
+systemd_user_DATA = $(systemd_user_in_files:.service.in=.service)
+endif
 
 $(service_DATA): $(service_in_files) Makefile
 	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
 
-clean-local:
-	rm -f *~ *.loT $(BUILT_SOURCES) $(service_DATA)
+$(systemd_user_DATA): $(systemd_user_in_files) Makefile
+	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
 
-EXTRA_DIST = hal-marshal.list $(service_in_files) gphoto2.monitor
+CLEANFILES = \
+	*~ \
+	*.loT \
+	$(BUILT_SOURCES) \
+	$(service_DATA) \
+	$(systemd_user_DATA) \
+	$(NULL)
+
+EXTRA_DIST = \
+	hal-marshal.list \
+	$(service_in_files) \
+	$(systemd_user_in_files) \
+	$(remote_volume_monitors_DATA) \
+	$(NULL)

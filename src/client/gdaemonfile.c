@@ -246,7 +246,6 @@ g_daemon_file_get_parent (GFile *file)
   GFile *parent;
   const char *base;
   char *parent_path;
-  gsize len;    
 
   path = daemon_file->path;
   base = strrchr (path, '/');
@@ -257,12 +256,7 @@ g_daemon_file_get_parent (GFile *file)
   while (base > path && *base == '/')
     base--;
 
-  len = (guint) 1 + base - path;
-  
-  parent_path = g_new (gchar, len + 1);
-  g_memmove (parent_path, path, len);
-  parent_path[len] = 0;
-
+  parent_path = g_strndup (path, (guint) 1 + base - path);
   parent = new_file_for_new_path (daemon_file, parent_path);
   g_free (parent_path);
   
@@ -440,6 +434,11 @@ create_proxy_for_file2 (GFile *file1,
   GDaemonFile *daemon_file2 = G_DAEMON_FILE (file2);
   GMountInfo *mount_info1, *mount_info2;
   GDBusConnection *connection;
+
+  if (path1_out)
+    *path1_out = NULL;
+  if (path2_out)
+    *path2_out = NULL;
 
   proxy = NULL;
   mount_info2 = NULL;
@@ -2075,8 +2074,8 @@ g_daemon_file_mount_enclosing_volume (GFile *location,
   
   data = g_new0 (MountData, 1);
   data->callback = callback;
-  if (data->cancellable)
-    data->cancellable = g_object_ref (data->cancellable);
+  if (cancellable)
+    data->cancellable = g_object_ref (cancellable);
   data->user_data = user_data;
   data->file = g_object_ref (location);
   if (mount_operation)
@@ -2282,8 +2281,21 @@ g_daemon_file_find_enclosing_mount (GFile *file,
 						  daemon_file->path,
 						  cancellable,
 						  error);
+
+  if (error && *error)
+    {
+      g_dbus_error_strip_remote_error (*error);
+      return NULL;
+    }
+
   if (mount_info == NULL)
-    goto out;
+    {
+      g_set_error (error, G_IO_ERROR,
+                   G_IO_ERROR_FAILED,
+                   "Internal error: \"%s\"",
+                   "No error but no mount info from g_daemon_vfs_get_mount_info_sync");
+      return NULL;
+    }
 
   if (mount_info->user_visible)
     {
@@ -2295,8 +2307,7 @@ g_daemon_file_find_enclosing_mount (GFile *file,
         }
       g_mount_info_unref (mount_info);
       
-      if (mount)
-	return G_MOUNT (mount);
+      return G_MOUNT (mount);
     }
 
   g_set_error_literal (error, G_IO_ERROR,
@@ -2305,10 +2316,6 @@ g_daemon_file_find_enclosing_mount (GFile *file,
      corresponding to a particular path/uri */
 		       _("Could not find enclosing mount"));
  
-out:
-  if (error && *error)
-    g_dbus_error_strip_remote_error (*error);
-
   return NULL;
 }
 
@@ -2581,8 +2588,8 @@ g_daemon_file_query_writable_namespaces (GFile                      *file,
 					 GCancellable               *cancellable,
 					 GError                    **error)
 {
-  GVfsDBusMount *proxy;
-  char *path;
+  GVfsDBusMount *proxy = NULL;
+  char *path = NULL;
   gboolean res;
   GVariant *iter_list;
   GFileAttributeInfoList *list;
@@ -2590,7 +2597,10 @@ g_daemon_file_query_writable_namespaces (GFile                      *file,
 
   proxy = create_proxy_for_file (file, NULL, &path, NULL, cancellable, error);
   if (proxy == NULL)
-    return FALSE;
+    {
+      list = g_file_attribute_info_list_new ();
+      goto out;
+    }
 
   iter_list = NULL;
   res = gvfs_dbus_mount_call_query_writable_namespaces_sync (proxy,
@@ -2604,27 +2614,23 @@ g_daemon_file_query_writable_namespaces (GFile                      *file,
       if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
         _g_dbus_send_cancelled_sync (g_dbus_proxy_get_connection (G_DBUS_PROXY (proxy)));
       _g_propagate_error_stripped (error, local_error);
-    }
-
-  g_free (path);
-  g_object_unref (proxy);
-
-  if (res)
-    {
-      list = _g_dbus_get_attribute_info_list (iter_list, error);
-      g_variant_unref (iter_list);
-    }
-  else
-    {
       list = g_file_attribute_info_list_new ();
+      goto out;
     }
 
+  list = _g_dbus_get_attribute_info_list (iter_list, error);
+  g_variant_unref (iter_list);
+
+out:
   g_file_attribute_info_list_add (list,
                                   "metadata",
                                   G_FILE_ATTRIBUTE_TYPE_STRING, /* Also STRINGV, but no way express this ... */
                                   G_FILE_ATTRIBUTE_INFO_COPY_WITH_FILE |
                                   G_FILE_ATTRIBUTE_INFO_COPY_WHEN_MOVED);
-  
+  g_free (path);
+  if (proxy != NULL)
+    g_object_unref (proxy);
+
   return list;
 }
 
@@ -2660,9 +2666,14 @@ set_metadata_attribute (GFile *file,
     }
 
   res = FALSE;
-  proxy = _g_daemon_vfs_get_metadata_proxy (cancellable, error);
-
-  if (proxy)
+  proxy = meta_tree_get_metadata_proxy ();
+  if (proxy == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   _("Error setting file metadata: %s"),
+                   _("can't get metadata proxy"));
+    }
+  else
     {
       builder = g_variant_builder_new (G_VARIANT_TYPE_VARDICT);
 
@@ -2837,6 +2848,14 @@ file_transfer (GFile                  *source,
       return FALSE;
     }
 
+  if (!native_transfer && remove_source &&
+      (flags & G_FILE_COPY_NO_FALLBACK_FOR_MOVE))
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+                           _("Operation not supported"));
+      return FALSE;
+    }
+
   if (!native_transfer && local_path == NULL)
     {
       /* This will cause the fallback code to be involved */
@@ -2980,6 +2999,8 @@ retry:
       g_main_context_unref (data.context);
       g_main_loop_unref (data.loop);
     }
+  g_free (path1);
+  g_free (path2);
 
   if (! res)
     {
@@ -3073,7 +3094,7 @@ g_daemon_file_monitor_dir (GFile* file,
 
   proxy = create_proxy_for_file (file, &mount_info, &path, NULL, cancellable, error);
   if (proxy == NULL)
-    return FALSE;
+    return NULL;
 
   
   res = gvfs_dbus_mount_call_create_directory_monitor_sync (proxy,
@@ -3126,7 +3147,7 @@ g_daemon_file_monitor_file (GFile* file,
 
   proxy = create_proxy_for_file (file, &mount_info, &path, NULL, cancellable, error);
   if (proxy == NULL)
-    return FALSE;
+    return NULL;
 
   
   res = gvfs_dbus_mount_call_create_file_monitor_sync (proxy,
@@ -3506,13 +3527,15 @@ find_enclosing_mount_cb (GMountInfo *mount_info,
       if (mount == NULL)
         mount = g_daemon_mount_new (mount_info, NULL);
       
-      if (mount)
-        g_simple_async_result_set_op_res_gpointer (data->result, mount, g_object_unref);
-      else
-        g_simple_async_result_set_error (data->result, G_IO_ERROR, G_IO_ERROR_FAILED,
-                                         "Internal error: \"%s\"",
-                                         "Mount info did not yield a mount");
+      g_simple_async_result_set_op_res_gpointer (data->result, mount, g_object_unref);
+      goto out;
     }
+
+  g_simple_async_result_set_error (data->result, G_IO_ERROR,
+                                   G_IO_ERROR_NOT_FOUND,
+  /* translators: this is an error message when there is no user visible "mount" object
+     corresponding to a particular path/uri */
+                                   _("Could not find enclosing mount"));
 
 out:
   _g_simple_async_result_complete_with_cancellable (data->result, data->cancellable);

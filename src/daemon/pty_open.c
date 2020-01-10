@@ -86,8 +86,6 @@
 #undef HAVE_UNIX98_PTY
 #endif
 
-int _pty_set_size(int master, int columns, int rows);
-
 /* Solaris does not have the login_tty() function so implement locally. */
 #ifndef HAVE_LOGIN_TTY
 static int login_tty(int pts)
@@ -189,6 +187,7 @@ _pty_reset_signal_handlers(void)
 #endif
 }
 
+#ifdef HAVE_UNIX98_PTY
 #ifdef HAVE_SOCKETPAIR
 static int
 _pty_pipe_open(int *a, int *b)
@@ -407,6 +406,8 @@ _pty_run_on_pty(int fd, gboolean login,
 	return 0;
 }
 
+static int _pty_set_size(int master, int columns, int rows);
+
 /* Open the named PTY slave, fork off a child (storing its PID in child),
  * and exec the named command in its own session as a process group leader */
 static int
@@ -414,7 +415,7 @@ _pty_fork_on_pty_name(const char *path, int parent_fd, char **env_add,
 		      const char *command, char **argv,
 		      const char *directory,
 		      int columns, int rows, 
-		      int *stdin_fd, int *stdout_fd, int *stderr_fd, 
+		      int *stdin_fd, int *stdout_fd, int *stderr_fd, int *slave_fd,
 		      pid_t *child, gboolean reapchild, gboolean login)
 {
 	int fd, i;
@@ -452,6 +453,14 @@ _pty_fork_on_pty_name(const char *path, int parent_fd, char **env_add,
 		goto bail_stderr;
 	}
 
+	/* Open the slave PTY in the parent (but not as a controlling terminal)
+	 * otherwise later when we want to poll the master fd, POLLHUP is
+	 * returned if the process hasn't opened the slave side yet.
+         */
+	*slave_fd = open(path, O_RDWR | O_NOCTTY);
+	if (*slave_fd == -1)
+		goto bail_slavefd;
+
 	/* Start up a child. */
 	pid = fork();
 	switch (pid) {
@@ -469,6 +478,10 @@ _pty_fork_on_pty_name(const char *path, int parent_fd, char **env_add,
 		close(stdin_pipe[1]);
 		close(stdout_pipe[0]);
 		close(stderr_pipe[0]);
+
+		/* Close the slave PTY opened in the parent.  It is later
+		 * opened as a controlling terminal. */
+		close (*slave_fd);
 
 		if(reapchild) {
 			close(pid_pipe[0]);
@@ -595,6 +608,8 @@ _pty_fork_on_pty_name(const char *path, int parent_fd, char **env_add,
 	return -1;
 
  bail_fork:
+	close(*slave_fd);
+ bail_slavefd:
 	close(stderr_pipe[0]);
 	close(stderr_pipe[1]);
  bail_stderr:
@@ -629,7 +644,7 @@ _pty_fork_on_pty_name(const char *path, int parent_fd, char **env_add,
  *
  * Returns: 0 on success, -1 on failure.
  */
-int
+static int
 _pty_set_size(int master, int columns, int rows)
 {
 	struct winsize size;
@@ -724,13 +739,11 @@ _pty_unlockpt(int fd)
 #endif
 }
 
-#if defined(HAVE_UNIX98_PTY)
-
 static int
 _pty_open_unix98(pid_t *child, guint flags, char **env_add,
 			   const char *command, char **argv,
 			   const char *directory, int columns, int rows,
-			   int *stdin_fd, int *stdout_fd, int *stderr_fd)
+			   int *stdin_fd, int *stdout_fd, int *stderr_fd, int *slave_fd)
 {
 	int fd;
 	char *buf;
@@ -749,7 +762,7 @@ _pty_open_unix98(pid_t *child, guint flags, char **env_add,
 			if (_pty_fork_on_pty_name(buf, fd, env_add, command,
 						  argv, directory,
 						  columns, rows,
-						  stdin_fd, stdout_fd, stderr_fd, 
+						  stdin_fd, stdout_fd, stderr_fd, slave_fd,
 						  child, 
 						  flags & PTY_REAP_CHILD, 
 						  flags & PTY_LOGIN_TTY) != 0) {
@@ -766,9 +779,9 @@ _pty_open_unix98(pid_t *child, guint flags, char **env_add,
 
 static int
 _pty_open_bsd(pid_t *child, const char *command, char **argv,
-	      int *stdin_fd, int *stdout_fd, int *stderr_fd)
+	      int *stdin_fd, int *stdout_fd, int *stderr_fd, int *slave_fd)
 {
-	int master, slave;
+	int master;
 	char **args, *arg;
 	int stdin_pipe[2];
 	int stdout_pipe[2];
@@ -783,7 +796,7 @@ _pty_open_bsd(pid_t *child, const char *command, char **argv,
 	if (pipe(stderr_pipe))
 		goto bail_stderr;
 
-	if (openpty(&master, &slave, NULL, NULL, NULL) == -1)
+	if (openpty(&master, slave_fd, NULL, NULL, NULL) == -1)
 		return (-1);
 
 	switch(pid = fork()) {
@@ -799,7 +812,7 @@ _pty_open_bsd(pid_t *child, const char *command, char **argv,
 		close(stderr_pipe[0]);
 
 		setsid();
-		if (ioctl(slave, TIOCSCTTY, (char *)NULL) == -1)
+		if (ioctl(*slave_fd, TIOCSCTTY, (char *)NULL) == -1)
 			_exit(0);
 
 		/* Set up stdin/out/err */
@@ -834,11 +847,6 @@ _pty_open_bsd(pid_t *child, const char *command, char **argv,
 
 	/*
 	 * Parent
-	 */
-
-	/* XXX Don't close the slave pty, it's now the control
-	 *     terminal of the child and ssh needs it to authenticate.
-	close(slave);
 	 */
 	close(stdin_pipe[0]);
 	close(stdout_pipe[1]);
@@ -895,16 +903,17 @@ int
 pty_open(pid_t *child, guint flags, char **env_add, 
 	 const char *command, char **argv, const char *directory,
 	 int columns, int rows,
-	 int *stdin_fd, int *stdout_fd, int *stderr_fd)
+	 int *stdin_fd, int *stdout_fd, int *stderr_fd, int *slave_fd)
 {
 	int ret = -1;
 
 #if defined(HAVE_UNIX98_PTY)
 	ret = _pty_open_unix98(child, flags, env_add, command, argv, directory,
-			       columns, rows, stdin_fd, stdout_fd, stderr_fd);
+			       columns, rows, stdin_fd, stdout_fd, stderr_fd,
+			       slave_fd);
 #elif defined(HAVE_OPENPTY)
 	ret = _pty_open_bsd(child, command, argv,
-			    stdin_fd, stdout_fd, stderr_fd);
+			    stdin_fd, stdout_fd, stderr_fd, slave_fd);
 #else
 #error Have neither UNIX98 PTY nor BSD openpty!
 #endif

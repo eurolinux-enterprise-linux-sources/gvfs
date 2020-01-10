@@ -32,7 +32,6 @@ libexec_PROGRAMS =\
 
 AM_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/common \
 	$(LIBXML_CFLAGS) $(GLIB_CFLAGS) \
-	$(UDEV_CFLAGS) \
 	-DGVFS_LOCALEDIR=\""$(localedir)"\"     \
 	-DG_LOG_DOMAIN=\"GVFS\" \
 	-DDBUS_API_SUBJECT_TO_CHANGE
@@ -44,42 +43,48 @@ libmetadata_la_SOURCES = 		\
 	$(dbus_built_sources)		\
 	$(NULL)
 
-libmetadata_la_LIBADD = $(GLIB_LIBS) $(UDEV_LIBS)
+libmetadata_la_LIBADD = $(GLIB_LIBS)
 
-meta_ls_LDADD = libmetadata.la
+meta_ls_LDADD = libmetadata.la ../common/libgvfscommon.la
 meta_ls_SOURCES = meta-ls.c
 
 meta_set_LDADD = libmetadata.la ../common/libgvfscommon.la
 meta_set_SOURCES = meta-set.c
 
-meta_get_LDADD = libmetadata.la
+meta_get_LDADD = libmetadata.la ../common/libgvfscommon.la
 meta_get_SOURCES = meta-get.c
 
-meta_get_tree_LDADD = libmetadata.la
+meta_get_tree_LDADD = libmetadata.la ../common/libgvfscommon.la
 meta_get_tree_SOURCES = meta-get-tree.c
 
 convert_nautilus_metadata_LDADD = libmetadata.la $(LIBXML_LIBS)
 convert_nautilus_metadata_SOURCES = metadata-nautilus.c
 
-gvfsd_metadata_LDADD = libmetadata.la ../common/libgvfscommon.la
+gvfsd_metadata_LDADD = libmetadata.la ../common/libgvfscommon.la $(UDEV_LIBS)
 gvfsd_metadata_SOURCES = meta-daemon.c
+gvfsd_metadata_CFLAFGS = $(UDEV_CFLAGS)
 
 # D-BUS service file
 %.service: %.service.in ../config.log
 	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
 
 servicedir = $(DBUS_SERVICE_DIR)
-service_in_files = gvfs-metadata.service.in
-service_DATA = gvfs-metadata.service
+service_in_files = org.gtk.vfs.Metadata.service.in
+service_DATA = org.gtk.vfs.Metadata.service
+
+systemd_user_in_files = gvfs-metadata.service.in
+if USE_SYSTEMD_USER_UNITS
+systemd_user_DATA = gvfs-metadata.service
+endif
 
 EXTRA_DIST =				\
-	gvfs-metadata.service.in	\
+	$(service_in_files)		\
+	$(systemd_user_in_files)	\
 	dbus-interface.xml		\
 	$(NULL)
 
-clean-local:
-	rm -f gvfs-metadata.service
-
 CLEANFILES =				\
 	$(dbus_built_sources)		\
+	$(service_DATA)			\
+	$(systemd_user_DATA)		\
 	$(NULL)

@@ -32,15 +32,30 @@ remote_volume_monitorsdir = $(datadir)/gvfs/remote-volume-monitors
 remote_volume_monitors_DATA = goa.monitor
 
 servicedir = $(datadir)/dbus-1/services
-service_in_files = org.gtk.Private.GoaVolumeMonitor.service.in
+service_in_files = org.gtk.vfs.GoaVolumeMonitor.service.in
 service_DATA = $(service_in_files:.service.in=.service)
+
+systemd_user_in_files = gvfs-goa-volume-monitor.service.in
+if USE_SYSTEMD_USER_UNITS
+systemd_user_DATA = $(systemd_user_in_files:.service.in=.service)
+endif
 
 $(service_DATA): $(service_in_files) Makefile
 	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
 
-clean-local:
-	rm -f *~ *.loT $(BUILT_SOURCES) $(service_DATA)
+$(systemd_user_DATA): $(systemd_user_in_files) Makefile
+	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
 
-DISTCLEANFILES = $(service_DATA)
+CLEANFILES = \
+	*~ \
+	*.loT \
+	$(BUILT_SOURCES) \
+	$(service_DATA) \
+	$(systemd_user_DATA) \
+	$(NULL)
 
-EXTRA_DIST = $(service_in_files) goa.monitor
+EXTRA_DIST = \
+	$(service_in_files) \
+	$(systemd_user_in_files) \
+	$(remote_volume_monitors_DATA) \
+	$(NULL)

@@ -218,7 +218,7 @@ print_mounts (const char *prefix)
 	  uri = g_file_get_uri (mount_root);
 	  if (prefix == NULL ||
 	      g_str_has_prefix (uri, prefix))
-	    g_print ("%s\n", uri);
+	    g_print ("%s%s\n", uri, g_str_has_suffix (uri, "/") ? "" : "/");
 	  g_free (uri);
 	  g_object_unref (mount_root);
 	  g_object_unref (mount);
@@ -271,7 +271,7 @@ show_completed_file (GFile *hit,
   GFile *cwd_f;
   GFile *home;
 
-  if (g_file_is_native (hit))
+  if (g_file_is_native (hit) && !g_str_has_prefix (arg, "file://"))
     {
       cwd = g_get_current_dir ();
       cwd_f = g_file_new_for_path (cwd);
@@ -342,12 +342,7 @@ print_completions (const char *arg)
       strchr (arg, '/') == NULL ||
       !g_file_query_exists (parent, NULL))
     {
-      GMount *mount;
-      mount = g_file_find_enclosing_mount (f, NULL, NULL);
-      if (mount == NULL)
-	print_mounts (unescaped);
-      else
-	g_object_unref (mount);
+      print_mounts (unescaped);
     }
 
   if (parent != NULL)

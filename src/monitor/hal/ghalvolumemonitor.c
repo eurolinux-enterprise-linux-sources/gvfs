@@ -394,7 +394,7 @@ g_hal_volume_monitor_constructor (GType                  type,
   monitor = G_HAL_VOLUME_MONITOR (object);
   monitor->pool = g_object_ref (get_hal_pool ());
 
-  monitor->mount_monitor = g_unix_mount_monitor_new ();
+  monitor->mount_monitor = g_unix_mount_monitor_get ();
 
   g_signal_connect (monitor->mount_monitor,
 		    "mounts_changed", G_CALLBACK (mounts_changed),
@@ -864,6 +864,7 @@ should_drive_be_ignored (HalPool *pool, HalDevice *d, GList *fstab_mount_points)
         }
     }
 
+  g_list_free (volumes);
   return got_volumes && all_volumes_ignored;
 }
 

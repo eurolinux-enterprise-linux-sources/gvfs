@@ -13,12 +13,10 @@
 #include "metabuilder.h"
 #include <glib.h>
 #include <glib/gstdio.h>
+#include "gvfsutils.h"
 #include "crc32.h"
-
-#ifdef HAVE_LIBUDEV
-#define LIBUDEV_I_KNOW_THE_API_IS_SUBJECT_TO_CHANGE
-#include <libudev.h>
-#endif
+#include "metadata-dbus.h"
+#include "gvfsdaemonprotocol.h"
 
 #define MAGIC "\xda\x1ameta"
 #define MAGIC_LEN 6
@@ -162,6 +160,34 @@ static MetaJournal *meta_journal_open          (MetaTree    *tree,
 static void         meta_journal_free          (MetaJournal *journal);
 static void         meta_journal_validate_more (MetaJournal *journal);
 
+GVfsMetadata *
+meta_tree_get_metadata_proxy ()
+{
+  static GVfsMetadata *proxy = NULL;
+  static volatile gsize initialized = 0;
+
+  if (g_once_init_enter (&initialized))
+    {
+      GError *error = NULL;
+
+      proxy = gvfs_metadata_proxy_new_for_bus_sync (G_BUS_TYPE_SESSION,
+                                                    G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS | G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
+                                                    G_VFS_DBUS_METADATA_NAME,
+                                                    G_VFS_DBUS_METADATA_PATH,
+                                                    NULL,
+                                                    &error);
+      if (error)
+        {
+          g_warning ("Error: %s\n", error->message);
+          g_error_free (error);
+        }
+
+      g_once_init_leave (&initialized, 1);
+    }
+
+  return proxy;
+}
+
 static gpointer
 verify_block_pointer (MetaTree *tree, guint32 pos, guint32 len)
 {
@@ -257,7 +283,7 @@ meta_tree_clear (MetaTree *tree)
   if (tree->fd != -1)
     {
       close (tree->fd);
-      tree->fd = 0;
+      tree->fd = -1;
     }
 }
 
@@ -266,38 +292,14 @@ link_to_tmp (const char *source, char *tmpl)
 {
   char *XXXXXX;
   int count, res;
-  static const char letters[] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  static const int NLETTERS = sizeof (letters) - 1;
-  glong value;
-  GTimeVal tv;
-  static int counter = 0;
 
   /* find the last occurrence of "XXXXXX" */
   XXXXXX = g_strrstr (tmpl, "XXXXXX");
   g_assert (XXXXXX != NULL);
 
-  /* Get some more or less random data.  */
-  g_get_current_time (&tv);
-  value = (tv.tv_usec ^ tv.tv_sec) + counter++;
-
-  for (count = 0; count < 100; value += 7777, ++count)
+  for (count = 0; count < 100; ++count)
     {
-      glong v = value;
-
-      /* Fill in the random bits.  */
-      XXXXXX[0] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[1] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[2] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[3] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[4] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[5] = letters[v % NLETTERS];
-
+      gvfs_randomize_string (XXXXXX, 6);
       res = link (source, tmpl);
 
       if (res >= 0)
@@ -570,7 +572,7 @@ meta_tree_lookup_by_name (const char *name,
         return tree;
 
       meta_tree_unref (tree);
-      tree = NULL;
+      return NULL;
     }
 
   filename = g_build_filename (g_get_user_data_dir (), "gvfs-metadata", name, NULL);
@@ -666,6 +668,7 @@ meta_tree_refresh_locked (MetaTree *tree, gboolean force_reread)
   return TRUE;
 }
 
+/* NB: The tree is uninitialized if FALSE is returned! */
 gboolean
 meta_tree_refresh (MetaTree *tree)
 {
@@ -2362,7 +2365,16 @@ meta_tree_flush_locked (MetaTree *tree)
 
   builder = meta_builder_new ();
 
-  copy_tree_to_builder (tree, tree->root, builder->root);
+  if (tree->root)
+    {
+      copy_tree_to_builder (tree, tree->root, builder->root);
+    }
+  else
+    {
+      /* It shouldn't happen, because tree is recovered in case of failed write
+       * out. Skip copy_tree_to_builder to avoid crash. */
+      g_warning ("meta_tree_flush_locked: tree->root == NULL, possible data loss");
+    }
 
   if (tree->journal)
     apply_journal_to_builder (tree, builder);
@@ -2370,14 +2382,44 @@ meta_tree_flush_locked (MetaTree *tree)
   res = meta_builder_write (builder,
 			    meta_tree_get_filename (tree));
   if (res)
-    /* Force re-read since we wrote a new file */
-    res = meta_tree_refresh_locked (tree, TRUE);
+    {
+      /* Force re-read since we wrote a new file */
+      res = meta_tree_refresh_locked (tree, TRUE);
+
+      if (tree->root == NULL)
+	{
+	  /* It shouldn't happen. We failed to write out an updated tree
+	   * probably, therefore all the data are lost. Backup the file and
+	   * reload the tree to avoid further crashes. */
+	  GTimeVal tv;
+	  char *timestamp, *backup;
+
+	  g_get_current_time (&tv);
+	  timestamp = g_time_val_to_iso8601 (&tv);
+	  backup = g_strconcat (meta_tree_get_filename (tree), ".backup.",
+				timestamp, NULL);
+	  g_rename (meta_tree_get_filename (tree), backup);
+
+	  g_warning ("meta_tree_flush_locked: tree->root == NULL, possible data loss\n"
+		     "corrupted file was moved to: %s\n"
+		     "(please make a comment on https://bugzilla.gnome.org/show_bug.cgi?id=598561 "
+		     "and attach the corrupted file)",
+		     backup);
+
+	  g_free (timestamp);
+	  g_free (backup);
+
+	  res = meta_tree_refresh_locked (tree, TRUE);
+	  g_assert (res);
+	}
+  }
 
   meta_builder_free (builder);
 
   return res;
 }
 
+/* NB: The tree can be uninitialized if FALSE is returned! */
 gboolean
 meta_tree_flush (MetaTree *tree)
 {
@@ -2794,63 +2836,42 @@ struct _MetaLookupCache {
   char *last_device_tree;
 };
 
-#ifdef HAVE_LIBUDEV
-
-static struct udev *udev;
-G_LOCK_DEFINE_STATIC (udev);
-
-static char *
-get_tree_from_udev (MetaLookupCache *cache,
-		    dev_t devnum)
-{
-  struct udev_device *dev;
-  const char *uuid, *label;
-  char *res;
-
-  G_LOCK (udev);
-
-  if (udev == NULL)
-    udev = udev_new ();
-
-  dev = udev_device_new_from_devnum (udev, 'b', devnum);
-  uuid = udev_device_get_property_value (dev, "ID_FS_UUID_ENC");
-
-  res = NULL;
-  if (uuid)
-    {
-      res = g_strconcat ("uuid-", uuid, NULL);
-    }
-  else
-    {
-      label = udev_device_get_property_value (dev, "ID_FS_LABEL_ENC");
-
-      if (label)
-	res = g_strconcat ("label-", label, NULL);
-    }
-
-  udev_device_unref (dev);
-
-  G_UNLOCK (udev);
-
-  return res;
-}
-#endif
 
 static const char *
 get_tree_for_device (MetaLookupCache *cache,
 		     dev_t device)
 {
-#ifdef HAVE_LIBUDEV
+  gchar *res = NULL;
+
   if (device != cache->last_device)
     {
+      GError *error = NULL;
+      GVfsMetadata *metadata_proxy;
+
+      metadata_proxy = meta_tree_get_metadata_proxy ();
+      if (metadata_proxy != NULL)
+        gvfs_metadata_call_get_tree_from_device_sync (metadata_proxy,
+                                                      major (device),
+                                                      minor (device),
+                                                      &res,
+                                                      NULL,
+                                                      &error);
+
+      if (error)
+        {
+	  if (!g_error_matches (error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD))
+	    g_warning ("Error: %s\n", error->message);
+          g_error_free (error);
+        }
+
+      if (res && res[0] == '\0')
+        g_clear_pointer (&res, g_free);
       cache->last_device = device;
       g_free (cache->last_device_tree);
-      cache->last_device_tree = get_tree_from_udev (cache, device);
+      cache->last_device_tree = res;
     }
 
   return cache->last_device_tree;
-#endif
-  return NULL;
 }
 
 

@@ -822,7 +822,10 @@ complete_unmount_with_op (UnmountWithOpData *data, gboolean no_more_processes)
     }
   else if (!data->ret)
     {
-      /*  "show-processes" signal wasn't handled, return TRUE to signal we should unmount */
+      /*  If the "show-processes" signal wasn't handled */
+      g_simple_async_result_set_error (simple, G_IO_ERROR, G_IO_ERROR_BUSY,
+                                       _("File system is busy"));
+      ret = FALSE;
     }
   else
     {
@@ -906,6 +909,8 @@ unmount_with_op_data_free (UnmountWithOpData *data)
  * gvfs_backend_unmount_with_operation_sync().
  *
  * If the operation was cancelled, G_IO_ERROR_FAILED_HANDLED will be returned.
+ * If the operation wasn't interacted and there were outstanding jobs,
+ * G_IO_ERROR_BUSY will be returned.
  *
  * Returns: %TRUE if the backend should be unmounted (either no blocking
  *     processes or the user decided to unmount anyway), %FALSE if

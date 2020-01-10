@@ -558,12 +558,13 @@ file_info_from_message (SoupMessage *msg,
         }
     }
 
+  g_file_info_set_file_type (info, G_FILE_TYPE_REGULAR);
+
   text = soup_message_headers_get_content_type (msg->response_headers, NULL);
   if (text)
     {
       GIcon *icon;
 
-      g_file_info_set_file_type (info, G_FILE_TYPE_REGULAR);
       g_file_info_set_content_type (info, text);
       g_file_info_set_attribute_string (info, G_FILE_ATTRIBUTE_STANDARD_FAST_CONTENT_TYPE, text);
 
@@ -673,6 +674,19 @@ try_query_info_on_read (GVfsBackend           *backend,
     return TRUE;
 }
 
+static gboolean
+try_query_fs_info (GVfsBackend *backend,
+                   GVfsJobQueryFsInfo *job,
+                   const char *filename,
+                   GFileInfo *info,
+                   GFileAttributeMatcher *matcher)
+{
+  g_file_info_set_attribute_string (info, G_FILE_ATTRIBUTE_FILESYSTEM_TYPE, "http");
+  g_file_info_set_attribute_boolean (info, G_FILE_ATTRIBUTE_FILESYSTEM_REMOTE, TRUE);
+  g_vfs_job_succeeded (G_VFS_JOB (job));
+  return TRUE;
+}
+
 
 #define DEBUG_MAX_BODY_SIZE (100 * 1024 * 1024)
 
@@ -696,6 +710,7 @@ g_vfs_backend_http_class_init (GVfsBackendHttpClass *klass)
   backend_class->try_close_read         = try_close_read;
   backend_class->try_query_info         = try_query_info;
   backend_class->try_query_info_on_read = try_query_info_on_read;
+  backend_class->try_query_fs_info      = try_query_fs_info;
 
   /* Initialize the SoupSession, common to all backend instances */
   the_session = soup_session_new_with_options ("user-agent",
@@ -713,6 +728,9 @@ g_vfs_backend_http_class_init (GVfsBackendHttpClass *klass)
   /* Send Accept-Language header (see bug 166795) */
   g_object_set (the_session, "accept-language-auto", TRUE, NULL);
 
+  /* Prevent connection timeouts during long operations like COPY. */
+  g_object_set (the_session, "timeout", 0, NULL);
+
   /* Logging */
   debug = g_getenv ("GVFS_HTTP_DEBUG");
   if (debug)
@@ -720,10 +738,10 @@ g_vfs_backend_http_class_init (GVfsBackendHttpClass *klass)
       SoupLogger         *logger;
       SoupLoggerLogLevel  level;
 
-      if (g_ascii_strcasecmp (debug, "all") ||
-          g_ascii_strcasecmp (debug, "body"))
+      if (g_ascii_strcasecmp (debug, "all") == 0 ||
+          g_ascii_strcasecmp (debug, "body") == 0)
         level = SOUP_LOGGER_LOG_BODY;
-      else if (g_ascii_strcasecmp (debug, "header"))
+      else if (g_ascii_strcasecmp (debug, "header") == 0)
         level = SOUP_LOGGER_LOG_HEADERS;
       else
         level = SOUP_LOGGER_LOG_MINIMAL;
