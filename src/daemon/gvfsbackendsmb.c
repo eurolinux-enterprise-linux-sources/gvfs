@@ -35,6 +35,7 @@
 #include <gio/gio.h>
 
 #include "gvfsbackendsmb.h"
+#include "gvfsbackendsmbprivate.h"
 #include "gvfsjobopenforread.h"
 #include "gvfsjobread.h"
 #include "gvfsjobseekread.h"
@@ -82,13 +83,6 @@ struct _GVfsBackendSmb
 	
   gboolean password_in_keyring;
   GPasswordSave password_save;
-  
-  /* Cache */
-  char *cached_server_name;
-  char *cached_share_name;
-  char *cached_domain;
-  char *cached_username;
-  SMBCSRV *cached_server;
 };
 
 
@@ -318,157 +312,7 @@ auth_callback (SMBCCTX *context,
            backend->last_user, backend->last_domain);
 }
 
-/* Add a server to the cache system
- *
- * @param c         pointer to smb context
- * @param srv       pointer to server to add
- * @param server    server name 
- * @param share     share name
- * @param workgroup workgroup used to connect
- * @param username  username used to connect
- * @return          0 on success. 1 on failure.
- *
- */ 
-static int
-add_cached_server (SMBCCTX *context, SMBCSRV *new,
-		   const char *server_name, const char *share_name, 
-		   const char *domain, const char *username)
-{
-  GVfsBackendSmb *backend;
-
-  backend = smbc_getOptionUserData (context);
-  
-  if (backend->cached_server != NULL)
-    return 1;
-
-  backend->cached_server_name = g_strdup (server_name);
-  backend->cached_share_name = g_strdup (share_name);
-  backend->cached_domain = g_strdup (domain);
-  backend->cached_username = g_strdup (username);
-  backend->cached_server = new;
-
-  return 0;
-}
-
-/* Remove cached server
- *
- * @param c         pointer to smb context
- * @param srv       pointer to server to remove
- * @return          0 when found and removed. 1 on failure.
- *
- */ 
-static int
-remove_cached_server(SMBCCTX * context, SMBCSRV * server)
-{
-  GVfsBackendSmb *backend;
-
-  backend = smbc_getOptionUserData (context);
-  
-  if (backend->cached_server == server)
-    {
-      g_free (backend->cached_server_name);
-      backend->cached_server_name = NULL;
-      g_free (backend->cached_share_name);
-      backend->cached_share_name = NULL;
-      g_free (backend->cached_domain);
-      backend->cached_domain = NULL;
-      g_free (backend->cached_username);
-      backend->cached_username = NULL;
-      backend->cached_server = NULL;
-      return 0;
-    }
-  return 1;
-}
-
-
-/* Look up a server in the cache system
- *
- * @param c         pointer to smb context
- * @param server    server name to match
- * @param share     share name to match
- * @param workgroup workgroup to match
- * @param username  username to match
- * @return          pointer to SMBCSRV on success. NULL on failure.
- *
- */ 
-static SMBCSRV *
-get_cached_server (SMBCCTX * context,
-		   const char *server_name, const char *share_name,
-		   const char *domain, const char *username)
-{
-  GVfsBackendSmb *backend;
-
-  backend = smbc_getOptionUserData (context);
-
-  if (backend->cached_server != NULL &&
-      strcmp (backend->cached_server_name, server_name) == 0 &&
-      strcmp (backend->cached_share_name, share_name) == 0 &&
-      strcmp (backend->cached_domain, domain) == 0 &&
-      strcmp (backend->cached_username, username) == 0)
-    return backend->cached_server;
-
-  return NULL;
-}
-
-/* Try to remove all servers from the cache system and disconnect
- *
- * @param c         pointer to smb context
- *
- * @return          0 when found and removed. 1 on failure.
- *
- */ 
-static int
-purge_cached (SMBCCTX * context)
-{
-  GVfsBackendSmb *backend;
-  
-  backend = smbc_getOptionUserData (context);
-
-  if (backend->cached_server)
-    remove_cached_server(context, backend->cached_server);
-  
-  return 0;
-}
-
 #define SUB_DELIM_CHARS  "!$&'()*+,;="
-
-static gboolean
-is_valid (char c, const char *reserved_chars_allowed)
-{
-  if (g_ascii_isalnum (c) ||
-      c == '-' ||
-      c == '.' ||
-      c == '_' ||
-      c == '~')
-    return TRUE;
-
-  if (reserved_chars_allowed &&
-      strchr (reserved_chars_allowed, c) != NULL)
-    return TRUE;
-  
-  return FALSE;
-}
-
-static void
-g_string_append_encoded (GString *string,
-			 const char *encoded,
-			 const char *reserved_chars_allowed)
-{
-  char c;
-  static const gchar hex[16] = "0123456789ABCDEF";
-  
-  while ((c = *encoded++) != 0)
-    {
-      if (is_valid (c, reserved_chars_allowed))
-	g_string_append_c (string, c);
-      else
-	{
-	  g_string_append_c (string, '%');
-	  g_string_append_c (string, hex[((guchar)c) >> 4]);
-	  g_string_append_c (string, hex[((guchar)c) & 0xf]);
-	}
-    }
-}
 
 static GString *
 create_smb_uri_string (const char *server,
@@ -483,26 +327,26 @@ create_smb_uri_string (const char *server,
     return uri;
 
   /* IPv6 server includes brackets in GMountSpec, smbclient doesn't */
-  if (server[0] == '[')
+  if (gvfs_is_ipv6 (server))
     {
-      g_string_append_encoded (uri, server + 1, NULL);
+      g_string_append_uri_escaped (uri, server + 1, NULL, FALSE);
       g_string_truncate (uri, uri->len - 3);
     }
   else
-    g_string_append_encoded (uri, server, NULL);
+    g_string_append_uri_escaped (uri, server, NULL, FALSE);
 
   if (port != -1)
     g_string_append_printf (uri, ":%d", port);
   g_string_append_c (uri, '/');
 
   if (share != NULL)
-    g_string_append_encoded (uri, share, NULL);
+    g_string_append_uri_escaped (uri, share, NULL, FALSE);
 
   if (path != NULL)
     {
       if (*path != '/')
 	g_string_append_c (uri, '/');
-      g_string_append_encoded (uri, path, SUB_DELIM_CHARS ":@/");
+      g_string_append_uri_escaped (uri, path, SUB_DELIM_CHARS ":@/", FALSE);
     }
 
   while (uri->len > 0 &&
@@ -541,6 +385,7 @@ do_mount (GVfsBackend *backend,
   gchar *port_str;
   GMountSpec *smb_mount_spec;
   smbc_stat_fn smbc_stat;
+  int errsv;
 
   smb_context = smbc_new_context ();
   if (smb_context == NULL)
@@ -560,13 +405,7 @@ do_mount (GVfsBackend *backend,
 
   smbc_setDebug (smb_context, debug_val);
   smbc_setFunctionAuthDataWithContext (smb_context, auth_callback);
-  
-  smbc_setFunctionAddCachedServer (smb_context, add_cached_server);
-  smbc_setFunctionGetCachedServer (smb_context, get_cached_server);
-  smbc_setFunctionRemoveCachedServer (smb_context, remove_cached_server);
-  smbc_setFunctionPurgeCachedServers (smb_context, purge_cached);
 
-  /* FIXME: is strdup() still needed here? -- removed */
   if (op_backend->default_workgroup != NULL)
     smbc_setWorkgroup (smb_context, op_backend->default_workgroup);
 
@@ -579,11 +418,6 @@ do_mount (GVfsBackend *backend,
                                        op_backend->user != NULL);
   smbc_setOptionNoAutoAnonymousLogin (smb_context, TRUE);
 
-  
-#if 0
-  smbc_setOptionDebugToStderr (smb_context, 1);
-#endif
-  
   if (!smbc_init_context (smb_context))
     {
       g_vfs_job_failed (G_VFS_JOB (job),
@@ -637,6 +471,8 @@ do_mount (GVfsBackend *backend,
   op_backend->mount_try = 0;
   op_backend->password_save = G_PASSWORD_SAVE_NEVER;
 
+  errsv = 0;
+
   do
     {
       op_backend->mount_try_again = FALSE;
@@ -647,14 +483,15 @@ do_mount (GVfsBackend *backend,
       smbc_stat = smbc_getFunctionStat (smb_context);
       res = smbc_stat (smb_context, uri, &st);
 
+      errsv = errno;
       g_debug ("do_mount - [%s; %d] res = %d, cancelled = %d, errno = [%d] '%s' \n",
              uri, op_backend->mount_try, res, op_backend->mount_cancelled,
-             errno, g_strerror (errno));
+             errsv, g_strerror (errsv));
 
       if (res == 0)
         break;
 
-      if (op_backend->mount_cancelled || (errno != EACCES && errno != EPERM))
+      if (op_backend->mount_cancelled || (errsv != EACCES && errsv != EPERM))
         {
           g_debug ("do_mount - (errno != EPERM && errno != EACCES), cancelled = %d, breaking\n", op_backend->mount_cancelled);
           break;
@@ -685,8 +522,6 @@ do_mount (GVfsBackend *backend,
 
   if (res != 0)
     {
-      op_backend->mount_source = NULL;
-      
       if (op_backend->mount_cancelled) 
         g_vfs_job_failed (G_VFS_JOB (job),
 			  G_IO_ERROR, G_IO_ERROR_FAILED_HANDLED,
@@ -695,7 +530,7 @@ do_mount (GVfsBackend *backend,
         g_vfs_job_failed (G_VFS_JOB (job),
 			  G_IO_ERROR, G_IO_ERROR_FAILED,
 			  /* translators: We tried to mount a windows (samba) share, but failed */
-			  _("Failed to mount Windows share: %s"), g_strerror (errno));
+			  _("Failed to mount Windows share: %s"), g_strerror (errsv));
 
       return;
     }
@@ -825,7 +660,7 @@ do_open_for_read (GVfsBackend *backend,
       if ((res == 0) && (S_ISDIR (st.st_mode)))
             g_vfs_job_failed (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_IS_DIRECTORY,
-                             _("Can't open directory"));
+                             _("Can’t open directory"));
       else
         g_vfs_job_failed_from_errno (G_VFS_JOB (job), olderr);
   }
@@ -849,14 +684,6 @@ do_read (GVfsBackend *backend,
   GVfsBackendSmb *op_backend = G_VFS_BACKEND_SMB (backend);
   ssize_t res;
   smbc_read_fn smbc_read;
-
-  /* libsmbclient limits blocksize to (64*1024)-2 for Windows servers,
-   * let's do the same here to achieve reasonable performance. (#588391)
-   *
-   * TODO: port to pull mechanism (#592468)
-   */
-  if (bytes_requested > 65534)
-    bytes_requested = 65534;
 
   smbc_read = smbc_getFunctionRead (op_backend->smb_context);
   res = smbc_read (op_backend->smb_context, (SMBCFILE *)handle, buffer, bytes_requested);
@@ -1972,9 +1799,7 @@ do_enumerate (GVfsBackend *backend,
 	    {
 	      int stat_res;
 	      g_string_truncate (uri, uri_start_len);
-	      g_string_append_encoded (uri,
-				       dirp->name,
-				       SUB_DELIM_CHARS ":@/");
+              g_string_append_uri_escaped (uri, dirp->name, SUB_DELIM_CHARS ":@/", FALSE);
 
 	      if (matcher == NULL ||
 		  g_file_attribute_matcher_matches_only (matcher, G_FILE_ATTRIBUTE_STANDARD_NAME))
@@ -2053,7 +1878,7 @@ do_set_display_name (GVfsBackend *backend,
     {
       g_vfs_job_failed (G_VFS_JOB (job),
                         G_IO_ERROR, G_IO_ERROR_EXISTS,
-                        _("Can't rename file, filename already exists"));
+                        _("Can’t rename file, filename already exists"));
       goto out;
     }
 
@@ -2202,7 +2027,7 @@ do_move (GVfsBackend *backend,
 	      g_vfs_job_failed (G_VFS_JOB (job),
 				G_IO_ERROR,
 				G_IO_ERROR_WOULD_MERGE,
-				_("Can't move directory over directory"));
+				_("Can’t move directory over directory"));
 	      g_free (source_uri);
 	      g_free (dest_uri);
 	      return;
@@ -2274,7 +2099,7 @@ do_move (GVfsBackend *backend,
 	  (errsv == EINVAL && source_is_dir))
 	g_vfs_job_failed (G_VFS_JOB (job), 
 			  G_IO_ERROR, G_IO_ERROR_WOULD_RECURSE,
-			  _("Can't recursively move directory"));
+			  _("Can’t recursively move directory"));
       else
 	g_vfs_job_failed_from_errno (G_VFS_JOB (job), errsv);
     }

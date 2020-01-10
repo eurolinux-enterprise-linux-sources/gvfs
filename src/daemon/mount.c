@@ -64,6 +64,7 @@ typedef struct  {
   char **scheme_aliases;
   int default_port;
   gboolean hostname_is_inet;
+  gboolean mount_per_client;
 } VfsMountable; 
 
 typedef void (*MountCallback) (VfsMountable *mountable,
@@ -296,7 +297,7 @@ dbus_mount_reply (GVfsDBusMountable *proxy,
       else
         {
           g_dbus_error_strip_remote_error (error);
-          g_warning ("dbus_mount_reply: Error from org.gtk.vfs.Mountable.mount(): %s", error->message);
+          g_debug ("dbus_mount_reply: Error from org.gtk.vfs.Mountable.mount(): %s\n", error->message);
           mount_finish (data, error);
           g_error_free (error);
         }
@@ -397,12 +398,22 @@ spawn_mount_handle_spawned (GVfsDBusSpawner *object,
 }
 
 static void
+child_watch_cb (GPid pid,
+                gint status,
+                gpointer user_data)
+{
+  g_spawn_close_pid (pid);
+}
+
+static void
 spawn_mount (MountData *data)
 {
   char *exec;
   GError *error;
   GDBusConnection *connection;
   static int mount_id = 0;
+  gchar **argv = NULL;
+  GPid pid;
 
   data->spawned = TRUE;
   
@@ -447,13 +458,25 @@ spawn_mount (MountData *data)
                           " ",
                           data->obj_path,
                           NULL);
-      if (!g_spawn_command_line_async (exec, &error))
-	{
+
+      /* G_SPAWN_DO_NOT_REAP_CHILD is necessary for admin backend to prevent
+       * double forking causing pkexec failures, see:
+       * https://bugzilla.gnome.org/show_bug.cgi?id=793445
+       */
+      if (!g_shell_parse_argv (exec, NULL, &argv, &error) ||
+          !g_spawn_async (NULL, argv, NULL, G_SPAWN_DO_NOT_REAP_CHILD, NULL, NULL, &pid, &error))
+        {
           g_dbus_interface_skeleton_unexport (G_DBUS_INTERFACE_SKELETON (data->spawner));
-	  mount_finish (data, error);
-	  g_error_free (error);
-	}
-      
+          mount_finish (data, error);
+          g_error_free (error);
+        }
+      else
+        {
+          g_child_watch_add (pid, child_watch_cb, NULL);
+        }
+
+      g_strfreev (argv);
+
       /* TODO: Add a timeout here to detect spawned app crashing */
       
       g_object_unref (connection);
@@ -535,6 +558,7 @@ read_mountable_config (void)
 			    g_key_file_get_string_list (keyfile, "Mount", "SchemeAliases", NULL, NULL);
 			  mountable->default_port = g_key_file_get_integer (keyfile, "Mount", "DefaultPort", NULL);
 			  mountable->hostname_is_inet = g_key_file_get_boolean (keyfile, "Mount", "HostnameIsInetAddress", NULL);
+			  mountable->mount_per_client = g_key_file_get_boolean (keyfile, "Mount", "MountPerClient", NULL);
 
 			  if (mountable->scheme == NULL)
 			    mountable->scheme = g_strdup (mountable->type);
@@ -774,6 +798,20 @@ lookup_mount (GVfsDBusMountTracker *object,
                                                    vfs_mount_to_dbus (mount)); 
 }
 
+static void
+sanitize_spec (GMountSpec *spec, GDBusMethodInvocation *invocation)
+{
+  const gchar *client;
+  VfsMountable *mountable;
+
+  mountable = lookup_mountable (spec);
+  if (mountable && mountable->mount_per_client)
+    {
+      client = g_dbus_method_invocation_get_sender (invocation);
+      g_mount_spec_set (spec, "client", client);
+    }
+}
+
 static gboolean 
 handle_lookup_mount (GVfsDBusMountTracker *object,
                      GDBusMethodInvocation *invocation,
@@ -786,6 +824,7 @@ handle_lookup_mount (GVfsDBusMountTracker *object,
 
   if (spec != NULL)
     {
+      sanitize_spec (spec, invocation);
       lookup_mount (object, invocation, spec, TRUE);
       g_mount_spec_unref (spec);
     }
@@ -820,21 +859,63 @@ handle_lookup_mount_by_fuse_path (GVfsDBusMountTracker *object,
   return TRUE;
 }
 
+static void
+build_mounts_array (GVariantBuilder *mounts_array,
+                    gboolean user_visible_only,
+                    GDBusMethodInvocation *invocation)
+{
+  GList *l;
+  VfsMount *mount;
+  VfsMountable *mountable;
+
+  g_variant_builder_init (mounts_array, G_VARIANT_TYPE (VFS_MOUNT_ARRAY_DBUS_STRUCT_TYPE));
+  for (l = mounts; l != NULL; l = l->next)
+    {
+      mount = l->data;
+
+      mountable = lookup_mountable (mount->mount_spec);
+      if (mountable && mountable->mount_per_client)
+        {
+          const gchar *client;
+
+          client = g_dbus_method_invocation_get_sender (invocation);
+          if (g_strcmp0 (g_mount_spec_get (mount->mount_spec, "client"), client) != 0)
+            continue;
+        }
+
+      if (!user_visible_only || mount->user_visible)
+        g_variant_builder_add_value (mounts_array, vfs_mount_to_dbus (mount));
+    }
+}
+
 static gboolean
 handle_list_mounts (GVfsDBusMountTracker *object,
                     GDBusMethodInvocation *invocation,
                     gpointer user_data)
 {
-  GList *l;
   GVariantBuilder mounts_array;
 
-  g_variant_builder_init (&mounts_array, G_VARIANT_TYPE (VFS_MOUNT_ARRAY_DBUS_STRUCT_TYPE));
-  for (l = mounts; l != NULL; l = l->next)
-    g_variant_builder_add_value (&mounts_array, vfs_mount_to_dbus (l->data));
-  
+  build_mounts_array (&mounts_array, FALSE, invocation);
+
   gvfs_dbus_mount_tracker_complete_list_mounts (object, invocation,
                                                 g_variant_builder_end (&mounts_array));
-  
+
+  return TRUE;
+}
+
+static gboolean
+handle_list_mounts2 (GVfsDBusMountTracker *object,
+                     GDBusMethodInvocation *invocation,
+                     gboolean arg_user_visible_only,
+                     gpointer user_data)
+{
+  GVariantBuilder mounts_array;
+
+  build_mounts_array (&mounts_array, arg_user_visible_only, invocation);
+
+  gvfs_dbus_mount_tracker_complete_list_mounts2 (object, invocation,
+                                                 g_variant_builder_end (&mounts_array));
+
   return TRUE;
 }
 
@@ -873,6 +954,8 @@ handle_mount_location (GVfsDBusMountTracker *object,
   else
     {
       VfsMount *mount;
+
+      sanitize_spec (spec, invocation);
       mount = match_vfs_mount (spec);
       
       if (mount != NULL)
@@ -1056,6 +1139,7 @@ mount_init (void)
   g_signal_connect (mount_tracker, "handle-lookup-mount", G_CALLBACK (handle_lookup_mount), NULL);
   g_signal_connect (mount_tracker, "handle-lookup-mount-by-fuse-path", G_CALLBACK (handle_lookup_mount_by_fuse_path), NULL);
   g_signal_connect (mount_tracker, "handle-list-mounts", G_CALLBACK (handle_list_mounts), NULL);
+  g_signal_connect (mount_tracker, "handle-list-mounts2", G_CALLBACK (handle_list_mounts2), NULL);
   g_signal_connect (mount_tracker, "handle-list-mountable-info", G_CALLBACK (handle_list_mountable_info), NULL);
   g_signal_connect (mount_tracker, "handle-list-mount-types", G_CALLBACK (handle_list_mount_types), NULL);
   g_signal_connect (mount_tracker, "handle-unregister-mount", G_CALLBACK (handle_unregister_mount), NULL);

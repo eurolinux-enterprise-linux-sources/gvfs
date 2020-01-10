@@ -358,8 +358,8 @@ recompute_files (GVfsBackendNetwork *backend)
           else
             {
 	      char *uri = g_file_get_uri (server_file);
-              g_warning ("Couldn't create directory monitor on %s. Error: %s", 
-	     		 uri, error->message);
+              g_debug ("Couldn't create directory monitor on %s. Error: %s\n",
+                       uri, error ? error->message : "");
 	      g_free (uri);
               g_clear_error (&error);
             }
@@ -694,7 +694,7 @@ lookup_network_file (GVfsBackendNetwork *backend,
   out:
   g_vfs_job_failed (job, G_IO_ERROR,
 		    G_IO_ERROR_NOT_FOUND,
-		    _("File doesn't exist"));
+		    _("File doesn’t exist"));
 
   return NULL;
 }
@@ -849,7 +849,7 @@ try_create_monitor (GVfsBackend *backend,
     {
       g_vfs_job_failed (G_VFS_JOB (job), G_IO_ERROR,
 			G_IO_ERROR_NOT_SUPPORTED,
-			_("Can't monitor file or directory."));
+			_("Can’t monitor file or directory."));
       return TRUE;
     }
   

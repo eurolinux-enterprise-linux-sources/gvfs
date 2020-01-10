@@ -344,7 +344,7 @@ metafile_set_mtime (MetaFile    *file,
   file->last_changed = mtime;
 }
 
-GSequenceIter *
+static GSequenceIter *
 metafile_key_lookup_iter (MetaFile *file,
                           const char *key)
 {
@@ -784,7 +784,7 @@ write_children (GString *out,
 	  append_uint32 (out, 0, &child->metadata_pointer);
 	  append_time_t (out, child->last_changed, builder);
 
-          if (file->children)
+          if (child->children)
             g_queue_push_tail (files, child);
         }
 

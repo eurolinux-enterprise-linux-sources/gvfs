@@ -1,6 +1,6 @@
 AC_PREREQ([2.64])
 
-AC_INIT([gvfs],[1.30.4],[http://bugzilla.gnome.org/enter_bug.cgi?product=gvfs])
+AC_INIT([gvfs],[1.36.2],[http://bugzilla.gnome.org/enter_bug.cgi?product=gvfs])
 AM_INIT_AUTOMAKE([1.11.1 no-dist-gzip dist-xz tar-ustar -Wno-portability])
 
 AC_CONFIG_HEADERS(config.h)
@@ -61,9 +61,7 @@ GTK_DOC_CHECK
 DISTCHECK_CONFIGURE_FLAGS="--enable-gtk-doc"
 AC_SUBST(DISTCHECK_CONFIGURE_FLAGS)
 
-PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.49.3 gobject-2.0 gmodule-no-export-2.0 gio-unix-2.0 gio-2.0])
-
-PKG_CHECK_MODULES([DBUS], [dbus-1])
+PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.51.0 gobject-2.0 gmodule-no-export-2.0 gio-unix-2.0 gio-2.0])
 
 AC_ARG_WITH([dbus_service_dir],
 	    [AS_HELP_STRING([--with-dbus-service-dir=PATH],[choose directory for dbus service files, [default=PREFIX/share/dbus-1/services]])],
@@ -188,20 +186,22 @@ PKG_CHECK_MODULES([LIBXML], [libxml-2.0],
 	[msg_libxml=yes],
         [AM_CONDITIONAL([HAVE_LIBXML], [false])])
 
-dnl *************************
-dnl *** Check for libudev ***
-dnl *************************
-AC_ARG_ENABLE([udev], [AS_HELP_STRING([--disable-udev],[build without libudev])])
-msg_udev=no
+dnl **********************
+dnl *** Check for gudev ***
+dnl **********************
+AC_ARG_ENABLE([gudev], [AS_HELP_STRING([--disable-gudev],[build without gudev support])])
+msg_gudev=no
+GUDEV_REQUIRED=147
 
-if test "x$enable_udev" != "xno"; then
-  PKG_CHECK_EXISTS([libudev >= 138], [msg_udev=yes])
+if test "x$enable_gudev" != "xno"; then
+  PKG_CHECK_EXISTS([gudev-1.0 >= $GUDEV_REQUIRED], [msg_gudev=yes])
 
-  if test "x$msg_udev" = "xyes"; then
-    PKG_CHECK_MODULES([UDEV], [libudev])
-    AC_DEFINE([HAVE_LIBUDEV], 1, [Define to 1 if libudev is available])
+  if test "x$msg_gudev" = "xyes"; then
+    PKG_CHECK_MODULES([GUDEV], [gudev-1.0 >= $GUDEV_REQUIRED])
+    AC_DEFINE([HAVE_GUDEV], 1, [Define to 1 if gudev is available])
   fi
 fi
+AM_CONDITIONAL([USE_GUDEV], [test "$msg_gudev" = "yes"])
 
 dnl **********************
 dnl *** Check for FUSE ***
@@ -247,7 +247,7 @@ AC_ARG_ENABLE([udisks2], [AS_HELP_STRING([--disable-udisks2],[build without libu
 msg_udisks2=no
 UDISKS2_REQUIRED=1.97
 
-if test "x$enable_udisks2" != "xno"; then
+if test "x$enable_udisks2" != "xno" -a "x$msg_gudev" = "xyes"; then
   PKG_CHECK_EXISTS([udisks2 >= $UDISKS2_REQUIRED], [msg_udisks2=yes])
 
   if test "x$msg_udisks2" = "xyes"; then
@@ -271,7 +271,7 @@ AC_ARG_WITH([systemduserunitdir],
 AC_SUBST([systemd_userdir])
 
 if test "x$systemd_userdir" != "xno"; then
-  PKG_CHECK_MODULES([SYSTEMD], [systemd >= 206], [msg_systemd_user_units=yes], 1)
+  PKG_CHECK_EXISTS([systemd >= 206], [msg_systemd_user_units=yes])
 fi
 
 AM_CONDITIONAL([USE_SYSTEMD_USER_UNITS], [test "$msg_systemd_user_units" = "yes"])
@@ -297,66 +297,13 @@ fi
 
 AM_CONDITIONAL(USE_LIBSYSTEMD_LOGIN, [test "$msg_libsystemd_login" = "yes"])
 
-dnl **********************
-dnl *** Check for HAL ***
-dnl **********************
-AC_ARG_ENABLE([hal], [AS_HELP_STRING([--disable-hal],[build without HAL support])])
-msg_hal=no
-have_hal_fast_init=no
-HAL_REQUIRED=0.5.10
-
-if test "x$enable_hal" != "xno" && test "x$msg_gdu" = "xno"; then
-  PKG_CHECK_EXISTS([hal >= $HAL_REQUIRED], [msg_hal=yes])
-
-  if test "x$msg_hal" = "xyes"; then
-    PKG_CHECK_MODULES([HAL],[hal >= $HAL_REQUIRED])
-    AC_DEFINE([HAVE_HAL], 1, [Define to 1 if HAL is available])
-    save_libs="$LIBS"
-    LIBS="$HAL_LIBS"
-    AC_CHECK_LIB([hal], [libhal_get_all_devices_with_properties], [have_hal_fast_init=yes])
-    if test "x$have_hal_fast_init" = "xyes"; then
-      AC_DEFINE([HAVE_HAL_FAST_INIT], 1, [Define to 1 if libhal_get_all_devices_with_properties is available])
-    fi
-    LIBS="$save_libs"
-  fi
-fi
-
-AM_CONDITIONAL([USE_HAL], [test "$msg_hal" = "yes"])
-
-dnl **********************
-dnl *** Check for gudev ***
-dnl **********************
-AC_ARG_ENABLE([gudev], [AS_HELP_STRING([--disable-gudev],[build without gudev support])])
-msg_gudev=no
-GUDEV_REQUIRED=147
-
-if test "x$enable_gudev" != "xno"; then
-  PKG_CHECK_EXISTS([gudev-1.0 >= $GUDEV_REQUIRED], [msg_gudev=yes])
-
-  if test "x$msg_gudev" = "xyes"; then
-    PKG_CHECK_MODULES([GUDEV], [gudev-1.0 >= $GUDEV_REQUIRED])
-    AC_DEFINE([HAVE_GUDEV], 1, [Define to 1 if gudev is available])
-  fi
-fi
-AM_CONDITIONAL([USE_GUDEV], [test "$msg_gudev" = "yes"])
-
-if test "x$msg_gudev" = "xyes"; then
-  msg_hotplug_backend="gudev"
-else 
-  if test "x$msg_hal" = "xyes"; then
-    msg_hotplug_backend="hal"
-  else
-    msg_hotplug_backend="none"
-  fi
-fi
-
 dnl **************************************************
 dnl *** Check if we should build with CDDA backend ***
 dnl **************************************************
 AC_ARG_ENABLE([cdda], [AS_HELP_STRING([--disable-cdda],[build without CDDA backend])])
 msg_cdda=no
 
-if test "x$enable_cdda" != "xno" -a \( "x$msg_hal" = "xyes" -o "x$msg_gudev" = "xyes" \); then
+if test "x$enable_cdda" != "xno" -a "x$msg_gudev" = "xyes"; then
   PKG_CHECK_EXISTS([libcdio_paranoia >= 0.78.2], [msg_cdda=yes])
 
   if test "x$msg_cdda" = "xyes"; then
@@ -434,6 +381,11 @@ if test "x$enable_google" != "xno" ; then
         AC_DEFINE(HAVE_LIBGDATA_0_17_7, 1, [Define to 1 if libgdata 0.17.7 is available]),
         []
     )
+
+    PKG_CHECK_MODULES(LIBGDATA_0_17_9, libgdata >= 0.17.9,
+        AC_DEFINE(HAVE_LIBGDATA_0_17_9, 1, [Define to 1 if libgdata 0.17.9 is available]),
+        []
+    )
   fi
 fi
 
@@ -448,10 +400,10 @@ dnl *************************
 AC_ARG_ENABLE([gphoto2], [AS_HELP_STRING([--disable-gphoto2],[build without gphoto2 support])])
 msg_gphoto2=no
 
-if test "x$enable_gphoto2" != "xno" -a \( "x$msg_hal" = "xyes" -o "x$msg_gudev" = "xyes" \); then
+if test "x$enable_gphoto2" != "xno" -a "x$msg_gudev" = "xyes"; then
   PKG_CHECK_MODULES([GPHOTO2], [libgphoto2 >= 2.4.0], [msg_gphoto2=yes])
 
-  # Need OS tweaks in hal volume monitor backend
+  # Need OS tweaks in volume monitor backend
   case "$host" in
     *-linux* | *-freebsd* | *-kfreebsd*-gnu)
       use_gphoto2=yes
@@ -474,9 +426,9 @@ if test "x$enable_gphoto2" != "xno" -a \( "x$msg_hal" = "xyes" -o "x$msg_gudev" 
       )
     else
       if test "x$enable_gphoto2" = "xyes"; then
-        AC_MSG_ERROR([Cannot build with gphoto2 support. Need OS tweaks in hal volume monitor.])
+        AC_MSG_ERROR([Cannot build with gphoto2 support. Need OS tweaks in volume monitor.])
       else
-        AC_MSG_WARN([Not building with gphoto2 support. Need OS tweaks in hal volume monitor.])
+        AC_MSG_WARN([Not building with gphoto2 support. Need OS tweaks in volume monitor.])
       fi
       msg_gphoto2=no
     fi
@@ -521,6 +473,25 @@ AC_SUBST(BLURAY_CFLAGS)
 AC_SUBST(BLURAY_LIBS)
 AM_CONDITIONAL([HAVE_BLURAY], [test "$msg_bluray" = "yes"])
 
+dnl ************************************************
+dnl *** Check if we should build with libusb-1.0 ***
+dnl ************************************************
+AC_ARG_ENABLE([libusb], [AS_HELP_STRING([--disable-libusb],[build without libusb support])])
+msg_libusb=no
+
+if test "x$enable_libusb" != "xno"; then
+  PKG_CHECK_EXISTS([libusb-1.0 >= 1.0.21], [msg_libusb=yes])
+
+  if test "x$msg_libusb" = "xyes"; then
+    PKG_CHECK_MODULES([LIBUSB], [libusb-1.0 >= 1.0.21])
+    AC_DEFINE([HAVE_LIBUSB], 1, [Define to 1 if libusb is going to be built])
+  fi
+fi
+
+AC_SUBST(LIBUSB_CFLAGS)
+AC_SUBST(LIBUSB_LIBS)
+AM_CONDITIONAL([HAVE_LIBUSB], [test "$msg_libusb" = "yes"])
+
 dnl *************************
 dnl *** Check for libmtp ***
 dnl *************************
@@ -563,148 +534,40 @@ AM_CONDITIONAL(USE_LIBMTP, [test "$msg_libmtp" = "yes"])
 AM_CONDITIONAL(USE_GPHOTO2UTILS,
                [test "$msg_libmtp" = "yes" -o \( "$msg_gphoto2" = "yes" -a "$msg_gudev" = "yes" \)])
 
-dnl ==========================================================================
-dnl Samba 3.0
-
-dnl Samba 4 ships a pc file and requires a non-default include subdir, so pick it up:
-PKG_CHECK_MODULES([SMBCLIENT], [smbclient], [samba_default_cflags="$SMBCLIENT_CFLAGS"], [samba_default_cflags=-I/usr/include])
-
+dnl ***********************
+dnl *** Check for samba ***
+dnl ***********************
 AC_ARG_ENABLE([samba], [AS_HELP_STRING([--disable-samba],[build without samba support])])
-msg_samba="no"
-if test "x$enable_samba" != "xno"; then
-  AC_ARG_WITH([samba-includes], [AS_HELP_STRING([--with-samba-includes=PREFIX],[Location of samba includes.])],
-	      [with_samba_includes="-I$withval"], [with_samba_includes=${samba_default_cflags}])
-  have_samba_includes="no"
-  if test "x${with_samba_includes}" != "x-Ino"; then
-	CPPFLAGS_save="$CPPFLAGS"
+msg_samba=no
 
-	CPPFLAGS="$CPPFLAGS $with_samba_includes"
-	AC_CHECK_HEADER(libsmbclient.h, [ samba_includes="yes" ])
-	CPPFLAGS="$CPPFLAGS_save"
-	
-	if test "x{samba_includes}" != "xno" -a "x${samba_includes}" != "x"; then
-		have_samba_includes="yes"
-		if test "${with_samba_includes}" != "/usr/include" ; then
-			SAMBA_CFLAGS="$with_samba_includes"
-		else
-			SAMBA_CFLAGS=""
-		fi
-	else
-		SAMBA_CFLAGS=""
-	fi
+if test "x$enable_samba" != "xno"; then
+  PKG_CHECK_EXISTS([smbclient], [msg_samba=yes])
+
+  if test "x$msg_samba" = "xyes"; then
+    PKG_CHECK_MODULES([SAMBA], [smbclient])
+    AC_DEFINE([HAVE_SAMBA], 1, [Define to 1 if you have the samba libraries])
   fi
-  AC_ARG_WITH([samba-libs], [AS_HELP_STRING([--with-samba-libs=PREFIX],[Location of Samba libs.])],
-	      [with_samba_libs="$withval"], [with_samba_libs="/usr/lib"])
-  if test "x${with_samba_libs}" != "xno" -a "x${have_samba_includes}" != "xno"; then
-	LDFLAGS_save="$LDFLAGS"
-	
-	LDFLAGS="$LDFLAGS -L$with_samba_libs"
-	AC_CHECK_LIB([smbclient], [smbc_getFunctionStatVFS], [samba_libs="yes"], [samba_libs="no"])
-	LDFLAGS="$LDFLAGS_save"
-	if test "x${samba_libs}" != "xno"; then
-		AC_DEFINE([HAVE_SAMBA],, [Define to 1 if you have the samba libraries])
-		msg_samba="yes"
-                if test x$with_samba_libs != x/usr/lib; then
-                        SAMBA_LIBS="-L$with_samba_libs -lsmbclient"
-                else
-                	SAMBA_LIBS="-lsmbclient"
-                fi
-	else
-		AC_CHECK_LIB([smbclient], [smbc_new_context], [samba_old_libs="yes"], [samba_old_libs="no"])
-		if test "x${samba_old_libs}" != "xno"; then
-		   msg_samba="Too old, need at least samba 3.4.0"
-		fi
-		SAMBA_CFLAGS=""
-		SAMBA_LIBS=""
-	fi
-  fi
-  AC_MSG_CHECKING([for Samba libraries])
-  AC_MSG_RESULT($msg_samba)
 fi
+
 AM_CONDITIONAL([HAVE_SAMBA], [test "$msg_samba" = "yes"])
 AC_SUBST(SAMBA_CFLAGS)
 AC_SUBST(SAMBA_LIBS)
 
-dnl ==========================================================================
-
-dnl ****************************
-dnl *** Check for GTK        ***
-dnl ****************************
-
-AC_ARG_ENABLE([gtk], [AS_HELP_STRING([--disable-gtk],[build without GTK+])])
-msg_gtk=no
-GTK_REQUIRED=3.0
-
-if test "x$enable_gtk" != "xno"; then
-  PKG_CHECK_EXISTS([gtk+-3.0 >= $GTK_REQUIRED], [msg_gtk=yes])
-
-  if test "x$msg_gtk" = "xyes"; then
-    PKG_CHECK_MODULES([GTK],[gtk+-3.0 >= $GTK_REQUIRED])
-    AC_DEFINE([HAVE_GTK], 1, [Define to 1 if GTK+ is available])
-  fi
-fi
-
-AM_CONDITIONAL([USE_GTK], [test "$msg_gtk" = "yes"])
-
-AC_SUBST(GTK_CFLAGS)
-AC_SUBST(GTK_LIBS)
-
 dnl ****************************
 dnl *** Check for libarchive ***
 dnl ****************************
-
 AC_ARG_ENABLE([archive], [AS_HELP_STRING([--disable-archive],[build without archive support])])
-msg_archive="no"
-if test "x$enable_archive" != "xno"; then
-  AC_ARG_WITH([archive-includes], [AS_HELP_STRING([--with-archive-includes=PREFIX],[Location of archive includes.])],
-	      [with_archive_includes="$withval"], [with_archive_includes="/usr/include"])
-  have_archive_includes="no"
-  if test "x${with_archive_includes}" != "xno"; then
-	CPPFLAGS_save="$CPPFLAGS"
+msg_archive=no
 
-	CPPFLAGS="$CPPFLAGS -I$with_archive_includes"
-	AC_CHECK_HEADER([archive.h], [ archive_includes="yes" ])
-	CPPFLAGS="$CPPFLAGS_save"
-	
-	if test "x{archive_includes}" != "xno" -a "x${archive_includes}" != "x"; then
-		have_archive_includes="yes"
-		if test "${with_archive_includes}" != "/usr/include" ; then
-			ARCHIVE_CFLAGS="-I$with_archive_includes"
-		else
-			ARCHIVE_CFLAGS=""
-		fi
-	else
-		ARCHIVE_CFLAGS=""
-	fi
+if test "x$enable_archive" != "xno"; then
+  PKG_CHECK_EXISTS([libarchive], [msg_archive=yes])
+
+  if test "x$msg_archive" = "xyes"; then
+    PKG_CHECK_MODULES([ARCHIVE], [libarchive])
+    AC_DEFINE([HAVE_ARCHIVE], 1, [Define to 1 if you have the archive libraries])
   fi
-  AC_ARG_WITH([archive-libs], [AS_HELP_STRING([--with-archive-libs=PREFIX], [Location of Archive libs.])],
-	      [with_archive_libs="$withval"], [with_archive_libs="/usr/lib"])
-  if test "x${with_archive_libs}" != "xno" -a "x${have_archive_includes}" != "xno"; then
-	LDFLAGS_save="$LDFLAGS"
-	
-	LDFLAGS="$LDFLAGS -L$with_archive_libs"
-	AC_CHECK_LIB(archive, archive_entry_filetype, archive_libs="yes", archive_libs="no")
-	LDFLAGS="$LDFLAGS_save"
-	if test "x${archive_libs}" != "xno"; then
-		AC_DEFINE([HAVE_ARCHIVE],, [Define to 1 if you have the libarchive library])
-		msg_archive="yes"
-                if test x$with_archive_libs != x/usr/lib; then
-                        ARCHIVE_LIBS="-L$with_archive_libs -larchive"
-                else
-                	ARCHIVE_LIBS="-larchive"
-                fi
-	else
-		AC_CHECK_LIB([archive], [archive_entry_filetype], [archive_old_libs="yes"], [archive_old_libs="no"])
-		if test "x${archive_old_libs}" != "xno"; then
-		   msg_archive="Too old, need at least archive 3.0.22"
-		fi
-		ARCHIVE_CFLAGS=""
-		ARCHIVE_LIBS=""
-	fi
-  fi
-  AC_MSG_CHECKING(for Archive 3.libraries)
-  AC_MSG_RESULT($msg_archive)
 fi
+
 AM_CONDITIONAL([HAVE_ARCHIVE], [test "$msg_archive" = "yes"])
 AC_SUBST(ARCHIVE_CFLAGS)
 AC_SUBST(ARCHIVE_LIBS)
@@ -746,10 +609,10 @@ AC_ARG_ENABLE([nfs], [AS_HELP_STRING([--disable-nfs], [build without NFS support
 msg_nfs="no"
 
 if test "x$enable_nfs" != "xno"; then
-  PKG_CHECK_EXISTS([libnfs >= 1.9.7], [msg_nfs=yes])
+  PKG_CHECK_EXISTS([libnfs >= 1.9.8], [msg_nfs=yes])
 
   if test "x$msg_nfs" = "xyes"; then
-    PKG_CHECK_MODULES([NFS],[libnfs >= 1.9.7])
+    PKG_CHECK_MODULES([NFS],[libnfs >= 1.9.8])
     AC_DEFINE([HAVE_NFS], 1, [Define to 1 if nfs is going to be built])
   fi
 fi
@@ -768,25 +631,6 @@ AC_CHECK_DECL(_NL_ADDRESS_COUNTRY_AB3,
               AC_DEFINE(HAVE_NL_ADDRESS_COUNTRY_AB3, 1, Define to 1 if _NL_ADDRESS_COUNTRY_AB3 is declared),,
               [#include <langinfo.h>])
 
-dnl Install bash-completion file?
-AC_ARG_ENABLE([bash-completion],
-	      [AS_HELP_STRING([--disable-bash-completion],
-			      [build without bash-completion support])],
-	      [msg_bash_completion=$enableval],
-	      [msg_bash_completion=yes])
-if test "x$enable_bash_completion" != "xno"; then
-  msg_bash_completion=yes
-fi
-AM_CONDITIONAL([ENABLE_BASHCOMP], [test "$msg_bash_completion" = "yes"])
-
-AC_ARG_WITH([bash-completion-dir],
-	    [AS_HELP_STRING([--with-bash-completion-dir=PATH],
-			    [choose directory for bash-completion file (default=DATADIR/bash-completion/completions)])],
-	    [with_bashcomp_dir=$withval],
-	    [with_bashcomp_dir=$datadir/bash-completion/completions])
-BASHCOMP_DIR=$with_bashcomp_dir
-AC_SUBST(BASHCOMP_DIR)
-
 dnl ==========================================================================
 	
 dnl Globally define_GNU_SOURCE and therefore enable the GNU extensions
@@ -803,6 +647,7 @@ AC_PATH_PROG([GLIB_GENMARSHAL], [glib-genmarshal])
 dnl ==========================================================================
 dnl Look for various fs info getters
 
+AC_HEADER_MAJOR
 AC_CHECK_HEADERS([sys/statfs.h sys/statvfs.h sys/vfs.h sys/mount.h sys/param.h])
 AC_CHECK_FUNCS(statvfs statfs)
 AC_CHECK_MEMBERS([struct statfs.f_fstypename, struct statfs.f_bavail],,, [#include <sys/types.h>
@@ -936,7 +781,6 @@ daemon/trashlib/Makefile
 daemon/Makefile
 monitor/Makefile
 monitor/proxy/Makefile
-monitor/hal/Makefile
 monitor/gdu/Makefile
 monitor/udisks2/Makefile
 monitor/gphoto2/Makefile
@@ -944,7 +788,6 @@ monitor/afc/Makefile
 monitor/mtp/Makefile
 monitor/goa/Makefile
 programs/Makefile
-programs/completion/Makefile
 man/Makefile
 test/Makefile
 po/Makefile.in
@@ -956,8 +799,6 @@ echo "gvfs configuration summary:"
 echo "
         gio module directory : $giomodulesdir
 
-        hotplug backend:              $msg_hotplug_backend
-
 	Blu-ray metadata support:     $msg_bluray
 	Google support:               $msg_google
         HTTP/WebDAV support:          $msg_http
@@ -967,12 +808,12 @@ echo "
         Gphoto2 support:              $msg_gphoto2
         MTP support:                  $msg_libmtp
 	Polkit support:               $msg_admin
+        USB support:                  $msg_libusb
 	archive support:              $msg_archive
 	AFC support:                  $msg_afc
         AFP support:                  $msg_afp
         NFS support:                  $msg_nfs
         DNS-SD support:               $msg_avahi
-	Build HAL volume monitor:     $msg_hal (with fast init path: $have_hal_fast_init)
 	Build GDU volume monitor:     $msg_gdu
 	Build udisks2 volume monitor: $msg_udisks2
 	Build GOA volume monitor:     $msg_goa
@@ -980,8 +821,6 @@ echo "
         Use libsystemd-login:         $msg_libsystemd_login
         Use GCR:                      $msg_gcr
 	GNOME Keyring support:        $msg_keyring
-	GTK+ support:                 $msg_gtk
-	Bash-completion support:      $msg_bash_completion
 	Installed tests:              $msg_installed_tests
 "
 

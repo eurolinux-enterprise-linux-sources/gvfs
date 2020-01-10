@@ -48,10 +48,10 @@ static void
 log_debug (const gchar   *log_domain,
 	   GLogLevelFlags log_level,
 	   const gchar   *message,
-	   gpointer	      unused_data)
+           gpointer       user_data)
 {
   if (gvfs_get_debug ())
-    g_print ("%s", message);
+    g_print ("%s: %s", (const gchar *)user_data, message);
 }
 
 void
@@ -66,7 +66,7 @@ daemon_init (void)
   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
   textdomain (GETTEXT_PACKAGE);
   
-  g_log_set_handler (NULL, G_LOG_LEVEL_DEBUG, log_debug, NULL);
+  g_log_set_handler (NULL, G_LOG_LEVEL_DEBUG, log_debug, G_STRINGIFY (DEFAULT_BACKEND_TYPE));
 
   gvfs_setup_debug_handler ();
 
@@ -257,7 +257,7 @@ daemon_parse_args (int argc, char *argv[], const char *default_type)
 	  p = strchr (argv[i], '=');
 	  if (p == NULL || p[1] == 0 || p == argv[i])
 	    {
- 	      g_printerr (_("Usage: %s key=value key=value ..."), argv[0]);
+ 	      g_printerr (_("Usage: %s key=value key=value …"), argv[0]);
               g_printerr ("\n");
 	      exit (1);
 	    }
@@ -275,7 +275,7 @@ daemon_parse_args (int argc, char *argv[], const char *default_type)
 	{
 	  g_printerr (_("No mount type specified"));
           g_printerr ("\n");
-	  g_printerr (_("Usage: %s key=value key=value ..."), argv[0]);
+	  g_printerr (_("Usage: %s key=value key=value …"), argv[0]);
           g_printerr ("\n");
 	  exit (1);
 	}

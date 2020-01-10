@@ -43,6 +43,7 @@
 #include "gvfsjobenumerate.h"
 #include "gvfsjobopenforread.h"
 #include "gvfsjobopenforwrite.h"
+#include "gvfsjobqueryfsinfo.h"
 #include "gvfsjobread.h"
 #include "gvfsjobseekread.h"
 #include "gvfsjobsetdisplayname.h"
@@ -58,7 +59,7 @@ struct _GVfsBackendGoogle
   GHashTable *dir_entries;
   GHashTable *monitors;
   GList *dir_collisions;
-  GRecMutex mutex;
+  GRecMutex mutex; /* guards cache */
   GoaClient *client;
   gboolean entries_stale;
   gchar *account_identity;
@@ -210,7 +211,7 @@ sanitize_error (GError **error)
     {
       g_warning ("%s", (*error)->message);
       g_clear_error (error);
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, _("Target object doesn't exist"));
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, _("Target object doesn’t exist"));
     }
 }
 
@@ -557,18 +558,11 @@ rebuild_entries (GVfsBackendGoogle  *self,
       feed = gdata_documents_service_query_documents (self->service, query, cancellable, NULL, NULL, &local_error);
       if (local_error != NULL)
         {
-          if (succeeded_once)
-            {
-              g_warning ("Unable to query: %s", local_error->message);
-              g_error_free (local_error);
-            }
-          else
-            {
-              sanitize_error (&local_error);
-              g_propagate_error (error, local_error);
-            }
+          sanitize_error (&local_error);
+          g_propagate_error (error, local_error);
+          self->entries_stale = TRUE;
 
-          break;
+          goto out;
         }
 
       if (!succeeded_once)
@@ -598,6 +592,7 @@ rebuild_entries (GVfsBackendGoogle  *self,
 
   self->entries_stale = FALSE;
 
+ out:
   g_clear_object (&feed);
   g_clear_object (&query);
 }
@@ -873,6 +868,21 @@ generate_copy_name (GVfsBackendGoogle *self, GDataEntry *entry)
 
 /* ---------------------------------------------------------------------------------------------------- */
 
+static gboolean
+is_native_file (GDataEntry *entry)
+{
+  gchar *content_type;
+  gboolean ret = FALSE;
+
+  content_type = get_content_type_from_entry (entry);
+  if (content_type != NULL && g_str_has_prefix (content_type, CONTENT_TYPE_PREFIX_GOOGLE))
+    ret = TRUE;
+
+  g_free (content_type);
+
+  return ret;
+}
+
 static void
 build_file_info (GVfsBackendGoogle      *self,
                  GDataEntry             *entry,
@@ -935,7 +945,7 @@ build_file_info (GVfsBackendGoogle      *self,
       file_type = G_FILE_TYPE_REGULAR;
 
       /* We want native Drive content to open in the browser. */
-      if (content_type != NULL && g_str_has_prefix (content_type, CONTENT_TYPE_PREFIX_GOOGLE))
+      if (is_native_file (entry))
         {
           GDataLink *alternate;
           const gchar *uri;
@@ -1246,7 +1256,7 @@ g_vfs_backend_google_copy (GVfsBackend           *_self,
           g_vfs_job_failed (G_VFS_JOB (job),
                             G_IO_ERROR,
                             G_IO_ERROR_WOULD_RECURSE,
-                            _("Can't recursively copy directory"));
+                            _("Can’t recursively copy directory"));
           goto out;
         }
     }
@@ -1812,7 +1822,7 @@ g_vfs_backend_google_push (GVfsBackend           *_self,
                   g_vfs_job_failed (G_VFS_JOB (job),
                                     G_IO_ERROR,
                                     G_IO_ERROR_WOULD_MERGE,
-                                    _("Can't copy directory over directory"));
+                                    _("Can’t copy directory over directory"));
                   goto out;
                 }
               else
@@ -1820,9 +1830,17 @@ g_vfs_backend_google_push (GVfsBackend           *_self,
                   g_vfs_job_failed (G_VFS_JOB (job),
                                     G_IO_ERROR,
                                     G_IO_ERROR_IS_DIRECTORY,
-                                    _("Can't copy file over directory"));
+                                    _("Can’t copy file over directory"));
                   goto out;
                 }
+            }
+          else if (is_native_file (existing_entry))
+            {
+              g_vfs_job_failed (G_VFS_JOB (job),
+                                G_IO_ERROR,
+                                G_IO_ERROR_NOT_REGULAR_FILE,
+                                _("Target file is not a regular file"));
+              goto out;
             }
           else
             {
@@ -1831,7 +1849,7 @@ g_vfs_backend_google_push (GVfsBackend           *_self,
                   g_vfs_job_failed (G_VFS_JOB (job),
                                     G_IO_ERROR,
                                     G_IO_ERROR_WOULD_RECURSE,
-                                    _("Can't recursively copy directory"));
+                                    _("Can’t recursively copy directory"));
                   goto out;
                 }
             }
@@ -1851,7 +1869,7 @@ g_vfs_backend_google_push (GVfsBackend           *_self,
           g_vfs_job_failed (G_VFS_JOB (job),
                             G_IO_ERROR,
                             G_IO_ERROR_WOULD_RECURSE,
-                            _("Can't recursively copy directory"));
+                            _("Can’t recursively copy directory"));
           goto out;
         }
     }
@@ -1871,7 +1889,7 @@ g_vfs_backend_google_push (GVfsBackend           *_self,
 
   if (needs_overwrite)
     {
-      document = g_object_ref (existing_entry);
+      document = GDATA_DOCUMENTS_DOCUMENT (g_object_ref (existing_entry));
       title = gdata_entry_get_title (existing_entry);
 
       error = NULL;
@@ -1973,6 +1991,46 @@ g_vfs_backend_google_push (GVfsBackend           *_self,
 
 /* ---------------------------------------------------------------------------------------------------- */
 
+#if HAVE_LIBGDATA_0_17_9
+static void
+fs_info_cb (GObject      *source_object,
+            GAsyncResult *res,
+            gpointer      user_data)
+{
+  GDataDocumentsService *service = GDATA_DOCUMENTS_SERVICE (source_object);
+  GVfsJobQueryFsInfo *job = G_VFS_JOB_QUERY_FS_INFO (user_data);
+  GError *error = NULL;
+  GDataDocumentsMetadata *metadata;
+  goffset total, used;
+
+  metadata = gdata_documents_service_get_metadata_finish (service, res, &error);
+  if (error != NULL)
+    {
+      g_vfs_job_failed_from_error (G_VFS_JOB (job), error);
+      g_error_free (error);
+      goto out;
+    }
+
+  total = gdata_documents_metadata_get_quota_total (metadata);
+  used = gdata_documents_metadata_get_quota_used (metadata);
+  g_object_unref (metadata);
+
+  if (used >= 0) /* sanity check */
+    g_file_info_set_attribute_uint64 (job->file_info, G_FILE_ATTRIBUTE_FILESYSTEM_USED, used);
+
+  if (total >= 0) /* -1 'total' means unlimited quota, just don't report size in that case */
+    g_file_info_set_attribute_uint64 (job->file_info, G_FILE_ATTRIBUTE_FILESYSTEM_SIZE, total);
+
+  if (total >= 0 && used >= 0)
+    g_file_info_set_attribute_uint64 (job->file_info, G_FILE_ATTRIBUTE_FILESYSTEM_FREE, total - used);
+
+  g_vfs_job_succeeded (G_VFS_JOB (job));
+
+ out:
+  g_debug ("- query_fs_info\n");
+}
+#endif
+
 static gboolean
 g_vfs_backend_google_query_fs_info (GVfsBackend           *_self,
                                     GVfsJobQueryFsInfo    *job,
@@ -1991,6 +2049,18 @@ g_vfs_backend_google_query_fs_info (GVfsBackend           *_self,
   type = g_mount_spec_get_type (spec);
   g_file_info_set_attribute_string (info, G_FILE_ATTRIBUTE_FILESYSTEM_TYPE, type);
   g_file_info_set_attribute_boolean (info, G_FILE_ATTRIBUTE_FILESYSTEM_REMOTE, TRUE);
+
+#if HAVE_LIBGDATA_0_17_9
+  if (g_file_attribute_matcher_matches (matcher, G_FILE_ATTRIBUTE_FILESYSTEM_SIZE) ||
+      g_file_attribute_matcher_matches (matcher, G_FILE_ATTRIBUTE_FILESYSTEM_FREE) ||
+      g_file_attribute_matcher_matches (matcher, G_FILE_ATTRIBUTE_FILESYSTEM_USED))
+    {
+      GVfsBackendGoogle *self = G_VFS_BACKEND_GOOGLE (_self);
+      GCancellable *cancellable = G_VFS_JOB (job)->cancellable;
+      gdata_documents_service_get_metadata_async (self->service, cancellable, fs_info_cb, job);
+      return TRUE;
+    }
+#endif
 
   g_vfs_job_succeeded (G_VFS_JOB (job));
 
@@ -2197,7 +2267,7 @@ g_vfs_backend_google_open_for_read (GVfsBackend        *_self,
 
   if (GDATA_IS_DOCUMENTS_FOLDER (entry))
     {
-      g_vfs_job_failed (G_VFS_JOB (job), G_IO_ERROR, G_IO_ERROR_IS_DIRECTORY, _("Can't open directory"));
+      g_vfs_job_failed (G_VFS_JOB (job), G_IO_ERROR, G_IO_ERROR_IS_DIRECTORY, _("Can’t open directory"));
       goto out;
     }
 
@@ -2602,7 +2672,7 @@ g_vfs_backend_google_replace (GVfsBackend         *_self,
           g_vfs_job_failed (G_VFS_JOB (job), G_IO_ERROR, G_IO_ERROR_IS_DIRECTORY, _("Target file is a directory"));
           goto out;
         }
-      else if (!GDATA_IS_DOCUMENTS_DOCUMENT (existing_entry))
+      else if (is_native_file (existing_entry))
         {
           g_vfs_job_failed (G_VFS_JOB (job),
                             G_IO_ERROR,

@@ -50,10 +50,10 @@ endif
 %.localmount: %.mount.in ../config.log
 	$(AM_V_GEN) $(SED) -e "s|\@libexecdir\@|$(abs_builddir)|" $< > $@
 
-libexec_PROGRAMS=gvfsd gvfsd-sftp gvfsd-trash gvfsd-computer gvfsd-burn gvfsd-localtest gvfsd-ftp gvfsd-network
+libexec_PROGRAMS=gvfsd gvfsd-sftp gvfsd-trash gvfsd-computer gvfsd-burn gvfsd-localtest gvfsd-ftp gvfsd-network gvfsd-recent
 
-mount_in_files = sftp.mount.in ftp.mount.in ftps.mount.in trash.mount.in computer.mount.in burn.mount.in localtest.mount.in network.mount.in
-mount_DATA =  sftp.mount ftp.mount ftps.mount trash.mount computer.mount burn.mount localtest.mount network.mount
+mount_in_files = sftp.mount.in ftp.mount.in ftps.mount.in trash.mount.in computer.mount.in burn.mount.in localtest.mount.in network.mount.in recent.mount.in
+mount_DATA =  sftp.mount ftp.mount ftps.mount trash.mount computer.mount burn.mount localtest.mount network.mount recent.mount
 
 mount_in_files += admin.mount.in
 if HAVE_ADMIN
@@ -65,12 +65,6 @@ mount_in_files +=google.mount.in
 if USE_GOOGLE
 mount_DATA += google.mount
 libexec_PROGRAMS += gvfsd-google
-endif
-
-mount_in_files +=recent.mount.in
-if USE_GTK
-mount_DATA += recent.mount
-libexec_PROGRAMS += gvfsd-recent
 endif
 
 mount_in_files += http.mount.in dav.mount.in dav+sd.mount.in
@@ -154,6 +148,8 @@ EXTRA_DIST = 				\
 	$(gvfs_gschemas_convert_dist)	\
 	$(gsettings_ENUM_FILES)		\
 	org.gtk.vfs.file-operations.policy.in.in \
+	org.gtk.vfs.file-operations.rules \
+	meson.build			\
 	$(NULL)
 
 DISTCLEANFILES = $(mount_DATA) $(noinst_DATA)
@@ -285,6 +281,7 @@ gvfsd_smb_browse_SOURCES = \
 gvfsd_smb_browse_CPPFLAGS = \
 	$(flags) \
 	-DBACKEND_HEADER=gvfsbackendsmbbrowse.h \
+	-DDEFAULT_BACKEND_TYPE=smb-network \
 	-DMOUNTABLE_DBUS_NAME=org.gtk.vfs.mountpoint_smb_browse \
 	-DMAX_JOB_THREADS=1 \
 	-DBACKEND_TYPES='"smb-network", G_VFS_TYPE_BACKEND_SMB_BROWSE,"smb-server", G_VFS_TYPE_BACKEND_SMB_BROWSE,'
@@ -353,10 +350,9 @@ gvfsd_recent_CPPFLAGS = \
 	-DDEFAULT_BACKEND_TYPE=recent \
 	-DMAX_JOB_THREADS=10 \
 	-DBACKEND_USES_GVFS=1 \
-	-DBACKEND_TYPES='"recent", G_VFS_TYPE_BACKEND_RECENT,' \
-	$(GTK_CFLAGS)
+	-DBACKEND_TYPES='"recent", G_VFS_TYPE_BACKEND_RECENT,'
 
-gvfsd_recent_LDADD = $(libraries) $(GTK_LIBS)
+gvfsd_recent_LDADD = $(libraries)
 
 gvfsd_computer_SOURCES = \
 	gvfsbackendcomputer.c gvfsbackendcomputer.h \
@@ -446,19 +442,10 @@ gvfsd_cdda_CPPFLAGS = \
 	-DDEFAULT_BACKEND_TYPE=cdda \
 	-DMAX_JOB_THREADS=1 \
 	-DBACKEND_TYPES='"cdda", G_VFS_TYPE_BACKEND_CDDA,' \
-	$(CDDA_CFLAGS)
-if USE_GUDEV
-gvfsd_cdda_CPPFLAGS +=	$(GUDEV_CFLAGS)
-else
-gvfsd_cdda_CPPFLAGS +=	$(HAL_CFLAGS)
-endif
+	$(CDDA_CFLAGS) \
+	$(GUDEV_CFLAGS)
 
-if USE_GUDEV
 gvfsd_cdda_LDADD = $(libraries) $(CDDA_LIBS) $(GUDEV_LIBS)
-else
-gvfsd_cdda_LDADD = $(libraries) $(CDDA_LIBS) $(HAL_LIBS) \
-		   $(top_builddir)/common/libgvfscommon-hal.la
-endif
 
 gvfsd_admin_SOURCES = \
 	gvfsbackendadmin.c gvfsbackendadmin.h \
@@ -470,6 +457,7 @@ gvfsd_admin_CPPFLAGS = \
 	-DBACKEND_HEADER=gvfsbackendadmin.h \
 	-DDEFAULT_BACKEND_TYPE=admin \
 	-DBACKEND_TYPES='"admin", G_VFS_TYPE_BACKEND_ADMIN,' \
+	-DMOUNTABLE_DBUS_NAME=org.gtk.vfs.mountpoint_admin \
 	$(ADMIN_CFLAGS)
 
 gvfsd_admin_LDADD = $(libraries) $(ADMIN_LIBS)
@@ -498,21 +486,12 @@ gvfsd_gphoto2_CPPFLAGS = \
 	-DBACKEND_HEADER=gvfsbackendgphoto2.h \
 	-DDEFAULT_BACKEND_TYPE=gphoto2 \
 	-DMAX_JOB_THREADS=1 \
+	-DBACKEND_TYPES='"gphoto2", G_VFS_TYPE_BACKEND_GPHOTO2,' \
 	$(GPHOTO2_CFLAGS) \
-	-DBACKEND_TYPES='"gphoto2", G_VFS_TYPE_BACKEND_GPHOTO2,'
-if USE_GUDEV
-gvfsd_gphoto2_CPPFLAGS += $(GUDEV_CFLAGS)
-else
-gvfsd_gphoto2_CPPFLAGS += $(HAL_CFLAGS)
-endif
+	$(GUDEV_CFLAGS)
 
-if USE_GUDEV
 gvfsd_gphoto2_LDADD = $(libraries) $(GPHOTO2_LIBS) $(GUDEV_LIBS) \
 		      $(top_builddir)/common/libgvfscommon-gphoto2.la
-else
-gvfsd_gphoto2_LDADD = $(libraries) $(GPHOTO2_LIBS) $(HAL_LIBS) \
-		      $(top_builddir)/common/libgvfscommon-hal.la
-endif
 
 gvfsd_mtp_SOURCES = \
 	gvfsbackendmtp.c gvfsbackendmtp.h \
@@ -525,9 +504,9 @@ gvfsd_mtp_CPPFLAGS = \
 	-DDEFAULT_BACKEND_TYPE=mtp \
 	-DMAX_JOB_THREADS=1 \
 	-DBACKEND_TYPES='"mtp", G_VFS_TYPE_BACKEND_MTP,' \
-	$(GUDEV_CFLAGS) $(LIBMTP_CFLAGS)
+	$(GUDEV_CFLAGS) $(LIBMTP_CFLAGS) $(LIBUSB_CFLAGS)
 
-gvfsd_mtp_LDADD = $(libraries) $(GUDEV_LIBS) $(LIBMTP_LIBS) \
+gvfsd_mtp_LDADD = $(libraries) $(GUDEV_LIBS) $(LIBMTP_LIBS) $(LIBUSB_LIBS) \
 		  $(top_builddir)/common/libgvfscommon-gphoto2.la
 
 gvfsd_http_SOURCES = \
@@ -606,6 +585,7 @@ gvfsd_afp_browse_SOURCES = \
 gvfsd_afp_browse_CPPFLAGS = \
 	$(flags) \
 	-DBACKEND_HEADER=gvfsbackendafpbrowse.h \
+	-DDEFAULT_BACKEND_TYPE=afp-server \
 	-DMAX_JOB_THREADS=1 \
 	-DBACKEND_TYPES='"afp-server", G_VFS_TYPE_BACKEND_AFP_BROWSE,' \
 	$(LIBGCRYPT_CFLAGS)
@@ -630,6 +610,7 @@ gvfsd_afp_SOURCES = \
 gvfsd_afp_CPPFLAGS = \
 	$(flags) \
 	-DBACKEND_HEADER=gvfsbackendafp.h \
+	-DDEFAULT_BACKEND_TYPE=afp-volume \
 	-DMAX_JOB_THREADS=1 \
 	-DBACKEND_TYPES='"afp-volume", G_VFS_TYPE_BACKEND_AFP,' \
 	$(LIBGCRYPT_CFLAGS)
@@ -670,9 +651,11 @@ org.gtk.vfs.file-operations.policy.in: org.gtk.vfs.file-operations.policy.in.in 
 org.gtk.vfs.file-operations.policy: org.gtk.vfs.file-operations.policy.in Makefile
 	$(AM_V_GEN) XDG_DATA_DIRS=$(top_srcdir) $(MSGFMT) --xml --template $< -d $(top_srcdir)/po -o $@ || cp $< $@
 
+if HAVE_ADMIN
 gvfs_polkit_actionsdir = $(datadir)/polkit-1/actions
 gvfs_polkit_actions_in_files = org.gtk.vfs.file-operations.policy.in
 gvfs_polkit_actions_DATA = org.gtk.vfs.file-operations.policy
 
 gvfs_polkit_rulesdir = $(datadir)/polkit-1/rules.d
-dist_gvfs_polkit_rules_DATA = org.gtk.vfs.file-operations.rules
+gvfs_polkit_rules_DATA = org.gtk.vfs.file-operations.rules
+endif

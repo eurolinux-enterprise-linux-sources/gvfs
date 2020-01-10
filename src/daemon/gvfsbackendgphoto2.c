@@ -36,17 +36,10 @@
 #include <gio/gio.h>
 #include <gio/gfiledescriptorbased.h>
 #include <gphoto2.h>
-#ifdef HAVE_GUDEV
-  #include <gudev/gudev.h>
-  #include "gvfsgphoto2utils.h"
-#elif defined(HAVE_HAL)
-  #include <libhal.h>
-  #include <dbus/dbus.h>
-#else
-  #error Needs hal or gudev
-#endif
+#include <gudev/gudev.h>
 #include <sys/time.h>
 
+#include "gvfsgphoto2utils.h"
 #include "gvfsbackendgphoto2.h"
 #include "gvfsjobopenforread.h"
 #include "gvfsjobopeniconforread.h"
@@ -174,15 +167,8 @@ struct _GVfsBackendGphoto2
   /* see comment in ensure_ignore_prefix() */
   char *ignore_prefix;
 
-#ifdef HAVE_GUDEV
   GUdevClient *gudev_client;
   GUdevDevice *udev_device;
-#elif defined(HAVE_HAL)
-  DBusConnection *dbus_connection;
-  LibHalContext *hal_ctx;
-  char *hal_udi;
-  char *hal_name;
-#endif
   char *icon_name;
   char *symbolic_icon_name;
 
@@ -488,27 +474,27 @@ get_error_from_gphoto2 (const char *message, int rc)
     {
     case GP_ERROR_FILE_EXISTS:
     case GP_ERROR_DIRECTORY_EXISTS:
-      /* Translator: %s represents a more specific error message and %d the specific error code */
       error = g_error_new (G_IO_ERROR, 
+                           /* Translator: %s represents a more specific error message and %d the specific error code */
                            G_IO_ERROR_EXISTS, _("%s: %d: Directory or file exists"), message, rc);
       break;
 
     case GP_ERROR_FILE_NOT_FOUND:
     case GP_ERROR_DIRECTORY_NOT_FOUND:
-      /* Translator: %s represents a more specific error message and %d the specific error code */
       error = g_error_new (G_IO_ERROR, 
+                           /* Translator: %s represents a more specific error message and %d the specific error code */
                            G_IO_ERROR_NOT_FOUND, _("%s: %d: No such file or directory"), message, rc);
       break;
 
     case GP_ERROR_PATH_NOT_ABSOLUTE:
-      /* Translator: %s represents a more specific error message and %d the specific error code */
       error = g_error_new (G_IO_ERROR, 
+                           /* Translator: %s represents a more specific error message and %d the specific error code */
                            G_IO_ERROR_INVALID_FILENAME, _("%s: %d: Invalid filename"), message, rc);
       break;
 
     case GP_ERROR_NOT_SUPPORTED:
-      /* Translator: %s represents a more specific error message and %d the specific error code */
       error = g_error_new (G_IO_ERROR, 
+                           /* Translator: %s represents a more specific error message and %d the specific error code */
                            G_IO_ERROR_NOT_SUPPORTED, _("%s: %d: Not Supported"), message, rc);
       break;
 
@@ -542,31 +528,11 @@ release_device (GVfsBackendGphoto2 *gphoto2_backend)
       gphoto2_backend->camera = NULL;
     }
 
-#ifdef HAVE_GUDEV
   if (gphoto2_backend->gudev_client != NULL)
     g_object_unref (gphoto2_backend->gudev_client);
   if (gphoto2_backend->udev_device != NULL)
     g_object_unref (gphoto2_backend->udev_device);
 
-#elif defined(HAVE_HAL)
-  if (gphoto2_backend->dbus_connection != NULL)
-    {
-      dbus_connection_close (gphoto2_backend->dbus_connection);
-      dbus_connection_unref (gphoto2_backend->dbus_connection);
-      gphoto2_backend->dbus_connection = NULL;
-    }
-
-  if (gphoto2_backend->hal_ctx != NULL)
-    {
-      libhal_ctx_free (gphoto2_backend->hal_ctx);
-      gphoto2_backend->hal_ctx = NULL;
-
-    }
-  g_free (gphoto2_backend->hal_udi);
-  gphoto2_backend->hal_udi = NULL;
-  g_free (gphoto2_backend->hal_name);
-  gphoto2_backend->hal_name = NULL;
-#endif
   g_free (gphoto2_backend->icon_name);
   gphoto2_backend->icon_name = NULL;
   g_free (gphoto2_backend->symbolic_icon_name);
@@ -712,7 +678,6 @@ compute_display_name (GVfsBackendGphoto2 *gphoto2_backend)
 {
   char *result = NULL;
 
-#ifdef HAVE_GUDEV
   if (gphoto2_backend->udev_device != NULL)
     result = g_vfs_get_volume_name (gphoto2_backend->udev_device, "ID_GPHOTO2");
   if (result == NULL )
@@ -720,24 +685,12 @@ compute_display_name (GVfsBackendGphoto2 *gphoto2_backend)
       /* Translator: %s represents the device, e.g. usb:001,042  */
       result = g_strdup_printf (_("Digital Camera (%s)"), gphoto2_backend->gphoto2_port);
     }
-#elif defined(HAVE_HAL)
-  if (gphoto2_backend->hal_name == NULL)
-    {
-      /* Translator: %s represents the device, e.g. usb:001,042  */
-      result = g_strdup_printf (_("Digital Camera (%s)"), gphoto2_backend->gphoto2_port);
-    }
-  else
-    {
-      result = g_strdup (gphoto2_backend->hal_name);
-    }
-#endif
 
   return result;
 }
 
 /* ------------------------------------------------------------------------------------------------- */
 
-#ifdef HAVE_GUDEV
 static void
 setup_for_device (GVfsBackendGphoto2 *gphoto2_backend)
 {
@@ -790,227 +743,10 @@ on_uevent (GUdevClient *client, gchar *action, GUdevDevice *device, gpointer use
       caches_invalidate_all (gphoto2_backend);
 
       g_vfs_backend_force_unmount (G_VFS_BACKEND (gphoto2_backend));
+
+      g_signal_handlers_disconnect_by_func (gphoto2_backend->gudev_client, on_uevent, gphoto2_backend);
     }
 }
-
-#elif defined(HAVE_HAL)
-static void
-find_udi_for_device (GVfsBackendGphoto2 *gphoto2_backend)
-{
-  int num_camera_devices;
-  int num_mtp_devices;
-  int num_devices;
-  char **camera_devices;
-  char **mtp_devices;
-  char **devices;
-  int n, m;
-  int usb_bus_num;
-  int usb_device_num;
-  char **tokens;
-  char *endp;
-  char *camera_x_content_types[] = {"x-content/image-dcf", NULL};
-  char *music_player_x_content_types[] = {"x-content/audio-player", NULL};
-
-  gphoto2_backend->hal_udi = NULL;
-
-  /* parse the usb:001,041 string */
-
-  if (!g_str_has_prefix (gphoto2_backend->gphoto2_port, "usb:"))
-    {
-      return;
-    }
-
-  tokens = g_strsplit (gphoto2_backend->gphoto2_port + 4, ",", 0);
-  if (g_strv_length (tokens) != 2)
-    {
-      g_strfreev (tokens);
-      return;
-    }
-
-  usb_bus_num = strtol (tokens[0], &endp, 10);
-  if (*endp != '\0')
-    {
-      g_strfreev (tokens);
-      return;
-    }
-
-  usb_device_num = strtol (tokens[1], &endp, 10);
-  if (*endp != '\0')
-    {
-      g_strfreev (tokens);
-      return;
-    }
-
-  g_strfreev (tokens);
-
-  g_debug ("Parsed '%s' into bus=%d device=%d\n", gphoto2_backend->gphoto2_port, usb_bus_num, usb_device_num);
-
-  camera_devices = libhal_find_device_by_capability (gphoto2_backend->hal_ctx,
-                                                     "camera",
-                                                     &num_camera_devices,
-                                                     NULL);
-  mtp_devices = libhal_find_device_by_capability (gphoto2_backend->hal_ctx,
-                                                  "portable_audio_player",
-                                                  &num_mtp_devices,
-                                                  NULL);
-  for (m = 0; m < 2 && gphoto2_backend->hal_udi == NULL; m++)
-    {
-      devices = m == 0 ? camera_devices : mtp_devices;
-      num_devices = m == 0 ? num_camera_devices : num_mtp_devices;
-
-      if (devices != NULL)
-        {
-          for (n = 0; n < num_devices && gphoto2_backend->hal_udi == NULL; n++)
-            {
-              char *udi = devices[n];
-              LibHalPropertySet *ps;
-              
-              ps = libhal_device_get_all_properties (gphoto2_backend->hal_ctx, udi, NULL);
-              if (ps != NULL)
-                {
-                  const char *subsystem;
-              
-                  subsystem = libhal_ps_get_string (ps, "info.subsystem");
-                  if (subsystem != NULL && strcmp (subsystem, "usb") == 0)
-                    {
-                      int device_usb_bus_num;
-                      int device_usb_device_num;
-                      const char *icon_from_hal;
-                      const char *name_from_hal;
-                      
-                      device_usb_bus_num = libhal_ps_get_int32 (ps, "usb.bus_number");
-                      device_usb_device_num = libhal_ps_get_int32 (ps, "usb.linux.device_number");
-                      icon_from_hal = libhal_ps_get_string (ps, "info.desktop.icon");
-                      name_from_hal = libhal_ps_get_string (ps, "info.desktop.name");
-                      
-                      g_debug ("looking at usb device '%s' with bus=%d, device=%d\n",
-                               udi, device_usb_bus_num, device_usb_device_num);
-                      
-                      if (device_usb_bus_num == usb_bus_num && 
-                          device_usb_device_num == usb_device_num)
-                        {
-                          char *name;
-                          const char *parent_udi;
-                          LibHalPropertySet *ps2;
-
-                          g_debug ("udi '%s' is the one!\n", udi);
-                          
-                          /* IMPORTANT: 
-                           * 
-                           * Keep this naming code in sync with
-                           *
-                           *   hal/ghalvolume;do_update_from_hal_for_camera() 
-                           */
-                          name = NULL;
-                          parent_udi = libhal_ps_get_string (ps, "info.parent");
-                          if (name_from_hal != NULL)
-                            {
-                              name = g_strdup (name_from_hal);
-                            }
-                          else if (parent_udi != NULL)
-                            {
-                              ps2 = libhal_device_get_all_properties (gphoto2_backend->hal_ctx, parent_udi, NULL);
-                              if (ps2 != NULL)
-                                {
-                                  const char *vendor;
-                                  const char *product;
-                                  
-                                  vendor = libhal_ps_get_string (ps2, "usb_device.vendor");
-                                  product = libhal_ps_get_string (ps2, "usb_device.product");
-                                  if (vendor == NULL)
-                                    {
-                                      if (product != NULL)
-                                        name = g_strdup (product);
-                                    }
-                                  else
-                                    {
-                                      if (product != NULL)
-                                        name = g_strdup_printf ("%s %s", vendor, product);
-                                      else
-                                        {
-                                          if (m == 0)
-                                            /* Translator: %s is the vendor name, e.g. Panasonic */
-                                            name = g_strdup_printf (_("%s Camera"), vendor);
-                                          else
-                                            /* Translator: %s is the vendor name, e.g. Panasonic */
-                                            name = g_strdup_printf (_("%s Audio Player"), vendor);
-                                        }
-                                    }
-                                  libhal_free_property_set (ps2);
-                                }
-                            }
-                          if (name == NULL)
-                            {
-                              if (m == 0)
-                                name = g_strdup (_("Camera"));
-                              else
-                                name = g_strdup (_("Audio Player"));
-                            }
-                          
-                          gphoto2_backend->hal_udi = g_strdup (udi);
-                          gphoto2_backend->hal_name = name;
-                          if (icon_from_hal != NULL)
-                            {
-                              gphoto2_backend->icon_name = g_strdup (icon_from_hal);
-                            }
-                          else
-                            {
-                              if (m == 1)
-                                {
-                                  gphoto2_backend->icon_name = g_strdup ("multimedia-player");
-                                }
-                              else
-                                {
-                                  gphoto2_backend->icon_name = g_strdup ("camera-photo");
-                                }
-                            }
-
-                          /* TODO: should we sniff the files instead? */
-                          if (m == 0)
-                            {
-                              gphoto2_backend->symbolic_icon_name = g_strdup ("camera-photo-symbolic");
-                              g_vfs_backend_set_x_content_types (G_VFS_BACKEND (gphoto2_backend),
-                                                                 camera_x_content_types);
-                            }
-                          else
-                            {
-                              gphoto2_backend->symbolic_icon_name = g_strdup ("multimedia-player-symbolic");
-                              g_vfs_backend_set_x_content_types (G_VFS_BACKEND (gphoto2_backend),
-                                                                 music_player_x_content_types);
-                            }
-
-                        }
-                      
-                    }
-                  
-                  libhal_free_property_set (ps);
-                }
-            }
-          libhal_free_string_array (devices);
-        }
-    }
-}
-
-/* ------------------------------------------------------------------------------------------------- */
-
-static void
-_hal_device_removed (LibHalContext *hal_ctx, const char *udi)
-{
-  GVfsBackendGphoto2 *gphoto2_backend;
-
-  gphoto2_backend = G_VFS_BACKEND_GPHOTO2 (libhal_ctx_get_user_data (hal_ctx));
-
-  if (gphoto2_backend->hal_udi != NULL && strcmp (udi, gphoto2_backend->hal_udi) == 0)
-    {
-      g_debug ("we have been removed!\n");
-
-      /* nuke all caches so we're a bit more valgrind friendly */
-      caches_invalidate_all (gphoto2_backend);
-
-      g_vfs_backend_force_unmount (G_VFS_BACKEND (gphoto2_backend));
-    }
-}
-#endif
 
 /* ------------------------------------------------------------------------------------------------- */
 
@@ -1497,7 +1233,6 @@ do_mount (GVfsBackend *backend,
 
   g_debug ("do_mount %p\n", gphoto2_backend);
 
-#ifdef HAVE_GUDEV
   /* setup gudev */
   const char *subsystems[] = {"usb", NULL};
 
@@ -1511,48 +1246,6 @@ do_mount (GVfsBackend *backend,
     }
 
   g_signal_connect (gphoto2_backend->gudev_client, "uevent", G_CALLBACK (on_uevent), gphoto2_backend);
-
-#elif defined(HAVE_HAL)
-  /* setup libhal */
-  DBusError dbus_error;
-
-  dbus_error_init (&dbus_error);
-  gphoto2_backend->dbus_connection = dbus_bus_get_private (DBUS_BUS_SYSTEM, &dbus_error);
-  if (dbus_error_is_set (&dbus_error))
-    {
-      dbus_error_free (&dbus_error);
-      g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_FAILED, _("Cannot connect to the system bus"));
-      g_vfs_job_failed_from_error (G_VFS_JOB (job), error);
-      g_error_free (error);
-      return;
-    }
-  
-  dbus_connection_set_exit_on_disconnect (gphoto2_backend->dbus_connection, FALSE);
-
-  gphoto2_backend->hal_ctx = libhal_ctx_new ();
-  if (gphoto2_backend->hal_ctx == NULL)
-    {
-      g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_FAILED, _("Cannot create libhal context"));
-      g_vfs_job_failed_from_error (G_VFS_JOB (job), error);
-      g_error_free (error);
-      return;
-    }
-
-  _g_dbus_connection_integrate_with_main (gphoto2_backend->dbus_connection);
-  libhal_ctx_set_dbus_connection (gphoto2_backend->hal_ctx, gphoto2_backend->dbus_connection);
-  
-  if (!libhal_ctx_init (gphoto2_backend->hal_ctx, &dbus_error))
-    {
-      dbus_error_free (&dbus_error);
-      g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_FAILED, _("Cannot initialize libhal"));
-      g_vfs_job_failed_from_error (G_VFS_JOB (job), error);
-      g_error_free (error);
-      return;
-    }
-
-  libhal_ctx_set_device_removed (gphoto2_backend->hal_ctx, _hal_device_removed);
-  libhal_ctx_set_user_data (gphoto2_backend->hal_ctx, gphoto2_backend);
-#endif
 
   /* setup gphoto2 */
 
@@ -1571,11 +1264,7 @@ do_mount (GVfsBackend *backend,
 
   g_debug ("  decoded host='%s'\n", gphoto2_backend->gphoto2_port);
 
-#ifdef HAVE_GUDEV
   setup_for_device (gphoto2_backend);
-#elif defined(HAVE_HAL)
-  find_udi_for_device (gphoto2_backend);
-#endif
 
   gphoto2_backend->context = gp_context_new ();
   if (gphoto2_backend->context == NULL)
@@ -1729,6 +1418,18 @@ do_mount (GVfsBackend *backend,
   g_debug ("  mounted %p\n", gphoto2_backend);
 }
 
+static void
+do_unmount (GVfsBackend *backend, GVfsJobUnmount *job,
+            GMountUnmountFlags flags,
+            GMountSource *mount_source)
+{
+  GVfsBackendGphoto2 *gphoto2_backend = G_VFS_BACKEND_GPHOTO2 (backend);
+
+  g_signal_handlers_disconnect_by_func (gphoto2_backend->gudev_client, on_uevent, gphoto2_backend);
+
+  g_vfs_job_succeeded (G_VFS_JOB (job));
+}
+
 /* ------------------------------------------------------------------------------------------------- */
 
 static gboolean
@@ -1797,7 +1498,7 @@ do_open_for_read_real (GVfsBackend *backend,
     {
       g_vfs_job_failed (G_VFS_JOB (job), G_IO_ERROR,
                         G_IO_ERROR_IS_DIRECTORY,
-                        _("Can't open directory"));
+                        _("Can’t open directory"));
       goto out;
     }
 
@@ -1896,7 +1597,7 @@ do_open_icon_for_read (GVfsBackend *backend,
       g_vfs_job_failed (G_VFS_JOB (job),
                         G_IO_ERROR,
                         G_IO_ERROR_INVALID_ARGUMENT,
-                        _("Malformed icon identifier '%s'"),
+                        _("Malformed icon identifier “%s”"),
                         icon_id);
     }
 }
@@ -2810,7 +2511,7 @@ do_delete (GVfsBackend *backend,
         {
           g_vfs_job_failed (G_VFS_JOB (job), G_IO_ERROR,
                             G_IO_ERROR_NOT_EMPTY,
-                            _("Directory '%s' is not empty"), filename);
+                            _("Directory “%s” is not empty"), filename);
           goto out;
         }
       else
@@ -2900,7 +2601,7 @@ do_create_internal (GVfsBackend *backend,
     {
       g_vfs_job_failed (G_VFS_JOB (job), G_IO_ERROR,
                         G_IO_ERROR_IS_DIRECTORY,
-                        _("Can't write to directory"));
+                        _("Can’t write to directory"));
       goto out;
     }
 
@@ -3724,7 +3425,8 @@ g_vfs_backend_gphoto2_class_init (GVfsBackendGphoto2Class *klass)
 
   backend_class->try_mount = try_mount;
   backend_class->mount = do_mount;
-   backend_class->open_icon_for_read = do_open_icon_for_read;
+  backend_class->unmount = do_unmount;
+  backend_class->open_icon_for_read = do_open_icon_for_read;
   backend_class->open_for_read = do_open_for_read;
   backend_class->try_read = try_read;
   backend_class->try_seek_on_read = try_seek_on_read;

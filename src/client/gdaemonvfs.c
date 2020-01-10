@@ -41,6 +41,7 @@
 #include <glib/gstdio.h>
 #include <gvfsdbus.h>
 #include "gvfsutils.h"
+#include "gvfsdaemondbus.h"
 
 typedef struct  {
   char *type;
@@ -562,23 +563,23 @@ find_string (GPtrArray *array, const char *find_me)
 }
 
 static GVfsDBusMountTracker *
-create_mount_tracker_proxy ()
+create_mount_tracker_proxy (GError **error)
 {
   GVfsDBusMountTracker *proxy;
-  GError *error;
+  GError *local_error;
 
-  error = NULL;
+  local_error = NULL;
   proxy = gvfs_dbus_mount_tracker_proxy_new_for_bus_sync (G_BUS_TYPE_SESSION,
                                                           G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS | G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
                                                           G_VFS_DBUS_DAEMON_NAME,
                                                           G_VFS_DBUS_MOUNTTRACKER_PATH,
                                                           NULL,
-                                                          &error);
+                                                          &local_error);
   if (proxy == NULL)
     {
       g_warning ("Error creating proxy: %s (%s, %d)\n",
-                  error->message, g_quark_to_string (error->domain), error->code);
-      g_error_free (error);
+                  local_error->message, g_quark_to_string (local_error->domain), local_error->code);
+      _g_propagate_error_stripped (error, local_error);
     }
   
   return proxy;
@@ -599,7 +600,7 @@ fill_mountable_info (GDaemonVfs *vfs)
   gint32 default_port;
   gboolean host_is_inet;
   
-  proxy = create_mount_tracker_proxy ();
+  proxy = create_mount_tracker_proxy (NULL);
   if (proxy == NULL)
     return;
 
@@ -844,6 +845,7 @@ async_get_mount_info_response (GVfsDBusMountTracker *proxy,
                                                           &error))
     {
       /* g_warning ("Error from org.gtk.vfs.MountTracker.lookupMount(): %s", error->message); */
+      g_dbus_error_strip_remote_error (error);
       data->callback (NULL, data->user_data, error);
       g_error_free (error);
     }
@@ -885,6 +887,7 @@ get_mount_info_async_got_proxy_cb (GObject *source_object,
   if (proxy == NULL)
     {
       g_warning ("Error creating MountTracker proxy: %s", error->message);
+      g_dbus_error_strip_remote_error (error);
       data->callback (NULL, data->user_data, error);
       free_get_mount_info_data (data);
       g_error_free (error);
@@ -946,7 +949,7 @@ _g_daemon_vfs_get_mount_info_sync (GMountSpec *spec,
   if (info != NULL)
     return info;
   
-  proxy = create_mount_tracker_proxy ();
+  proxy = create_mount_tracker_proxy (error);
   if (proxy == NULL)
     return NULL;
   
@@ -978,7 +981,7 @@ _g_daemon_vfs_get_mount_info_by_fuse_sync (const char *fuse_path,
   info = lookup_mount_info_by_fuse_path_in_cache (fuse_path);
   if (!info)
     {
-      proxy = create_mount_tracker_proxy ();
+      proxy = create_mount_tracker_proxy (NULL);
       if (proxy == NULL)
         return NULL;
 
@@ -1251,7 +1254,7 @@ g_daemon_vfs_local_file_set_attributes (GVfs       *vfs,
             {
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            _("Error setting file metadata: %s"),
-                           _("can't open metadata tree"));
+                           _("can’t open metadata tree"));
               res = FALSE;
               error = NULL; /* Don't set further errors */
             }
@@ -1262,7 +1265,7 @@ g_daemon_vfs_local_file_set_attributes (GVfs       *vfs,
 		{
 		  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
 			       _("Error setting file metadata: %s"),
-			       _("can't get metadata proxy"));
+			       _("can’t get metadata proxy"));
 		  res = FALSE;
 		  error = NULL; /* Don't set further errors */
 		}

@@ -1,37 +1,184 @@
-Major changes in 1.30.4
+Major changes in 1.36.2
 =======================
+* udisks2: Remove optical disc volumes/mounts if drive disappears
+* daemon: Prevent deadlock and invalid read when closing channels
+* metadata: Prevent usage of NULL if GUdevDevice is not found
+* Translation updates
+
+Major changes in 1.36.1
+=======================
+* backend: Fix crashes when "Volume is busy" prompt is shown
+* Translation updates
+
+Major changes in 1.36.0
+=======================
+* Translation updates
+
+Major changes in 1.35.92
+========================
+* build: Print summary of the options in meson
+* smb: Avoid "Error: Success" failure messages
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.35.91
+========================
+* mtp: Prevent crashes if device is unplugged during mount operation
+* daemon: Fix admin backend spawning on some systems
+* google: Return error properly when trying to replace native files
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.35.90
+========================
+* build: Several FreeBSD related fixes
+* Translation updates
+
+Major changes in 1.35.4
+=======================
+* recent: Prevent crash when recent file changed
+* trash: Fix trash::orig-path for relative paths
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.35.3
+=======================
+* mtp: Handle read-past-EOF ourselves to prevent hangs
+* Port several parts to GTask
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.35.2
+=======================
+* metadata: Remove udev dependency in favor of gudev
+* build: Enable elogind support in meson
+* build: Port to meson build system
+* gphoto2: Fix volume removal with current udev behavior
+* mtp: Fix volume removal with current udev behavior
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.35.1
+=======================
+* sftp: Add support for setting timestamps
+* dav: Prevent usage of uninitialized variables
+* afp: Prevent usage of uninitialized variable
+* programs: Remove bashism from gvfs-* wrapper script
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.34.0
+=======================
+* Translation updates
+
+Major changes in 1.33.92
+========================
+* Translation updates
+
+Major changes in 1.33.91
+========================
+* daemon: Avoid overflowing when querying for filesystem info
+* proxy: Fix shadow mount handling for equal paths
+* gdaemonfile: Fix g_file_equal for different mount_prefix
+* gdaemonfile: Fix relative path handling
+* client: Fix crash when calculating a relative path
+* channel: Set sockets as nonblocking to prevent deadlocks when copying
+* google: Report FS total size and free space
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.33.90
+========================
+* admin: Require mounting for each client explicitly
+* dav: Fix DAV implementation stripping spaces
+* gdaemonfileenumerator: Fix crashes in synchronous enumerator code
+* goa: Fix password-based authentication
+* Translation updates
+
+Major changes in 1.33.3
+=======================
+* Do not sent user invisible mounts in order to speed up g_volume_monitor_get
+* mtp: Remove avoidance of file push for big files for better performance
+* Various build fixes and cleanups
+* Port several parts to GTask
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.33.1
+========================
+* recent: Port from GtkRecentManager to GBookmarkFile (drop GTK+ dependency)
+* sftp: Handle SecurID password prompt
 * common: Fix potential crash caused by missing g_strdup
 * fuse: Prevent potential crash if file handle is not set
 * sftp: Prevent potential crash in case of parsing error
 * google: Prevent potential crashes if resolve_dir fails
 * gphoto2: Fix x-content-types setup
 * google: Fix reported file size
-* sftp: Limit writes to 32768 bytes
-* daemon: Bump maximum read channel buffer size
+* Port several parts to GTask
+* Several smaller bugfixes
+* Translation updates
 
-Major changes in 1.30.3
+Major changes in 1.32.0
 =======================
+* Translation updates
+
+Major changes in 1.31.92
+========================
+* Translation updates
+
+Major changes in 1.31.91
+========================
+* Translation updates
+
+Major changes in 1.31.90
+========================
+* recent: Set G_FILE_ATTRIBUTE_RECENT_MODIFED attribute
+* client: Ignore everything after first colon in userinfo
+* Stability improvements for force unmount procedure
+* Port several parts to GTask
+* Various logging improvements
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.31.4
+=======================
+* sftp: Limit writes to 32768 bytes
+* udisks2: Improve unmount notifications
+* daemon: Bump maximum read channel buffer size
 * recent: Fix crashes when DISPLAY is not set
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.31.3
+=======================
+* dnssd: Fix crashes for uris with colons
+* trash: Correctly determine fs type for paths with symlinks
+* gdaemonfile: Pass GFileCreateFlags in write operations
 * metadata: Various performance improvements
+* Several smaller bugfixes
+* Translation updates
+
+Major changes in 1.31.2
+=======================
 * dnssd: Fix crashes and leaks when mount fails
 * network: Fix crashes when mount fails
 * udisks2: Fix misleading notification when unmounting
 * smb: Fix IPv6 uri handling
-
-Major changes in 1.30.2
-=========================
+* smb: Improve read performance
+* udisks2: Add support for uuid
 * trash: Do not crash if home mount isn't found
 * admin: Fix polkit errors caused by redundant translations
+* Port several parts to GTask
+* Several smaller bugfixes
 * Translation updates
 
-Major changes in 1.30.1.1
-=========================
-* Revert udisks2 patches causing unwanted regressions
-
-Major changes in 1.30.1
+Major changes in 1.31.1
 =======================
-* udisks2: Fix handling of volumes with multiple mountpoints
-* udisks2: Filter out system mounts
+* udisks2: Improve handling of volumes with multiple mountpoints
+* man: Various man page updates
+* hal: Drop hal volume monitor
+* programs: Deprecate gvfs utils in favour of new gio tool
+* Several smaller bugfixes
 * Translation updates
 
 Major changes in 1.30.0

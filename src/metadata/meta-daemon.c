@@ -31,9 +31,14 @@
 #include "gvfsdaemonprotocol.h"
 #include "metadata-dbus.h"
 
-#ifdef HAVE_LIBUDEV
-#define LIBUDEV_I_KNOW_THE_API_IS_SUBJECT_TO_CHANGE
-#include <libudev.h>
+#ifdef HAVE_GUDEV
+#include <gudev/gudev.h>
+#endif
+
+#if MAJOR_IN_MKDEV
+#include <sys/mkdev.h>
+#elif MAJOR_IN_SYSMACROS
+#include <sys/sysmacros.h>
 #endif
 
 #define WRITEOUT_TIMEOUT_SECS 60
@@ -47,6 +52,9 @@ typedef struct {
 
 static GHashTable *tree_infos = NULL;
 static GVfsMetadata *skeleton = NULL;
+#ifdef HAVE_GUDEV
+static GUdevClient *gudev_client = NULL;
+#endif
 
 static void
 tree_info_free (TreeInfo *info)
@@ -159,7 +167,7 @@ handle_set (GVfsMetadata *object,
       g_dbus_method_invocation_return_error (invocation,
                                              G_IO_ERROR,
                                              G_IO_ERROR_NOT_FOUND,
-                                             _("Can't find metadata file %s"),
+                                             _("Can’t find metadata file %s"),
                                              arg_treefile);
       return TRUE;
     }
@@ -235,7 +243,7 @@ handle_remove (GVfsMetadata *object,
       g_dbus_method_invocation_return_error (invocation,
                                              G_IO_ERROR,
                                              G_IO_ERROR_NOT_FOUND,
-                                             _("Can't find metadata file %s"),
+                                             _("Can’t find metadata file %s"),
                                              arg_treefile);
       return TRUE;
     }
@@ -271,7 +279,7 @@ handle_move (GVfsMetadata *object,
       g_dbus_method_invocation_return_error (invocation,
                                              G_IO_ERROR,
                                              G_IO_ERROR_NOT_FOUND,
-                                             _("Can't find metadata file %s"),
+                                             _("Can’t find metadata file %s"),
                                              arg_treefile);
       return TRUE;
     }
@@ -303,32 +311,23 @@ handle_get_tree_from_device (GVfsMetadata *object,
 {
   char *res = NULL;
 
-#ifdef HAVE_LIBUDEV
-  dev_t devnum = makedev (arg_major, arg_minor);
-  struct udev_device *dev;
-  const char *uuid, *label;
-  static struct udev *udev;
+#ifdef HAVE_GUDEV
+  GUdevDeviceNumber devnum = makedev (arg_major, arg_minor);
+  GUdevDevice *device;
 
-  if (udev == NULL)
-    udev = udev_new ();
+  if (g_once_init_enter (&gudev_client))
+    g_once_init_leave (&gudev_client, g_udev_client_new (NULL));
 
-  dev = udev_device_new_from_devnum (udev, 'b', devnum);
-  uuid = udev_device_get_property_value (dev, "ID_FS_UUID_ENC");
-
-  res = NULL;
-  if (uuid)
+  device = g_udev_client_query_by_device_number (gudev_client, G_UDEV_DEVICE_TYPE_BLOCK, devnum);
+  if (device != NULL)
     {
-      res = g_strconcat ("uuid-", uuid, NULL);
-    }
-  else
-    {
-      label = udev_device_get_property_value (dev, "ID_FS_LABEL_ENC");
+      if (g_udev_device_has_property (device, "ID_FS_UUID_ENC"))
+        res = g_strconcat ("uuid-", g_udev_device_get_property (device, "ID_FS_UUID_ENC"), NULL);
+      else if (g_udev_device_has_property (device, "ID_FS_LABEL_ENC"))
+        res = g_strconcat ("label-", g_udev_device_get_property (device, "ID_FS_LABEL_ENC"), NULL);
 
-      if (label)
-        res = g_strconcat ("label-", label, NULL);
+      g_clear_object (&device);
     }
-
-  udev_device_unref (dev);
 #endif
 
   gvfs_metadata_complete_get_tree_from_device (object, invocation, res ? res : "");
@@ -403,7 +402,7 @@ main (int argc, char *argv[])
       /* the second %s is the error message                 */
       g_printerr (_("%s: %s"), g_get_application_name(), error->message);
       g_printerr ("\n");
-      g_printerr (_("Try \"%s --help\" for more information."),
+      g_printerr (_("Try “%s --help” for more information."),
 		  g_get_prgname ());
       g_printerr ("\n");
       g_error_free (error);
@@ -479,6 +478,9 @@ main (int argc, char *argv[])
     g_object_unref (conn);
   if (loop != NULL)
     g_main_loop_unref (loop);
+#ifdef HAVE_GUDEV
+  g_clear_object (&gudev_client);
+#endif
 
   return 0;
 }

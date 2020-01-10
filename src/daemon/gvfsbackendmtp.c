@@ -34,6 +34,9 @@
 #include <gio/gio.h>
 
 #include <libmtp.h>
+#if HAVE_LIBUSB
+#include <libusb.h>
+#endif
 
 #include "gvfsbackendmtp.h"
 #include "gvfsicon.h"
@@ -76,7 +79,11 @@
  * Constants
  ************************************************/
 
+#if HAVE_LIBUSB
+#define EVENT_POLL_PERIOD { 3600, 0 }
+#else
 #define EVENT_POLL_PERIOD { 1, 0 }
+#endif
 
 /************************************************
  * Private Types
@@ -371,6 +378,7 @@ g_vfs_backend_mtp_init (GVfsBackendMtp *backend)
 {
   g_debug ("(I) g_vfs_backend_mtp_init\n");
   GMountSpec *mount_spec;
+  const char *debug;
 
   g_mutex_init (&backend->mutex);
   g_vfs_backend_set_display_name (G_VFS_BACKEND (backend), "mtp");
@@ -386,6 +394,22 @@ g_vfs_backend_mtp_init (GVfsBackendMtp *backend)
   backend->event_pool = g_thread_pool_new ((GFunc) handle_event,
                                            backend, 1, FALSE, NULL);
 #endif
+
+  debug = g_getenv ("GVFS_MTP_DEBUG");
+  if (debug != NULL) {
+    int level;
+
+    if (g_ascii_strcasecmp ("ptp", debug) == 0)
+      level = LIBMTP_DEBUG_PTP;
+    else if (g_ascii_strcasecmp ("usb", debug) == 0)
+      level = LIBMTP_DEBUG_USB | LIBMTP_DEBUG_PTP;
+    else if (g_ascii_strcasecmp ("data", debug) == 0)
+      level = LIBMTP_DEBUG_DATA | LIBMTP_DEBUG_USB | LIBMTP_DEBUG_PTP;
+    else /* "all" */
+      level = LIBMTP_DEBUG_ALL;
+
+    LIBMTP_Set_Debug (level);
+  }
 
   g_debug ("(I) g_vfs_backend_mtp_init done.\n");
 }
@@ -596,6 +620,8 @@ on_uevent (GUdevClient *client, gchar *action, GUdevDevice *device, gpointer use
     op_backend->force_unmounted = TRUE;
     g_atomic_int_set (&op_backend->unmount_started, TRUE);
     g_vfs_backend_force_unmount ((GVfsBackend*)op_backend);
+
+    g_signal_handlers_disconnect_by_func (op_backend->gudev_client, on_uevent, op_backend);
   }
 
   g_debug ("(I) on_uevent done.\n");
@@ -627,7 +653,6 @@ check_event (gpointer user_data)
 {
   GVfsBackendMtp *backend = user_data;
 
-  LIBMTP_event_t event;
   while (!g_atomic_int_get (&backend->unmount_started)) {
     int ret;
     LIBMTP_mtpdevice_t *device = backend->device;
@@ -855,7 +880,7 @@ get_dev_path_and_device_from_host (GVfsJob *job,
     g_free (dev_path);
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("Couldn't find matching udev device."));
+                              _("Couldn’t find matching udev device."));
     return NULL;
   }
 
@@ -906,16 +931,14 @@ do_mount (GVfsBackend *backend,
   op_backend->volume_symbolic_icon = g_vfs_get_volume_symbolic_icon (device);
   g_object_unref (device);
 
-  op_backend->on_uevent_id =
-    g_signal_connect_object (op_backend->gudev_client, "uevent",
-                             G_CALLBACK (on_uevent), op_backend, 0);
-
-  op_backend->file_cache = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-
   LIBMTP_Init ();
 
   get_device (backend, host, G_VFS_JOB (job));
   if (!G_VFS_JOB (job)->failed) {
+    g_signal_connect (op_backend->gudev_client, "uevent", G_CALLBACK (on_uevent), op_backend);
+
+    op_backend->file_cache = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+
     GMountSpec *mtp_mount_spec = g_mount_spec_new ("mtp");
     g_mount_spec_set (mtp_mount_spec, "host", host);
     g_vfs_backend_set_mount_spec (backend, mtp_mount_spec);
@@ -960,6 +983,10 @@ do_unmount (GVfsBackend *backend, GVfsJobUnmount *job,
 
   g_atomic_int_set (&op_backend->unmount_started, TRUE);
 
+#if HAVE_LIBUSB
+  libusb_interrupt_event_handler (NULL);
+#endif
+
 #ifdef HAVE_LIBMTP_1_1_12
   /* Thread will terminate after flag is set. */
   g_thread_join (op_backend->event_thread);
@@ -984,8 +1011,9 @@ do_unmount (GVfsBackend *backend, GVfsJobUnmount *job,
   g_hash_table_unref (op_backend->file_cache);
 
   g_source_remove (op_backend->hb_id);
-  g_signal_handler_disconnect (op_backend->gudev_client,
-                               op_backend->on_uevent_id);
+
+  g_signal_handlers_disconnect_by_func (op_backend->gudev_client, on_uevent, op_backend);
+
   g_object_unref (op_backend->gudev_client);
   g_clear_pointer (&op_backend->dev_path, g_free);
   g_clear_pointer (&op_backend->volume_name, g_free);
@@ -1067,7 +1095,7 @@ get_device (GVfsBackend *backend, const char *id, GVfsJob *job) {
       if (device == NULL) {
         g_vfs_job_failed (G_VFS_JOB (job),
                           G_IO_ERROR, G_IO_ERROR_FAILED,
-                          _("Unable to open MTP device '%s'"), name);
+                          _("Unable to open MTP device “%s”"), name);
         g_free (name);
         goto exit;
       }
@@ -1435,7 +1463,7 @@ do_query_info (GVfsBackend *backend,
       LIBMTP_Clear_Errorstack (device);
       g_vfs_job_failed_literal (G_VFS_JOB (job),
                                 G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                                _("Directory doesn't exist"));
+                                _("Directory doesn’t exist"));
       goto exit;
     }
 
@@ -1460,7 +1488,7 @@ do_query_info (GVfsBackend *backend,
       g_debug ("(W) storage %X not found?!\n", entry->storage);
       g_vfs_job_failed_literal (G_VFS_JOB (job),
                                 G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                                _("Directory doesn't exist"));
+                                _("Directory doesn’t exist"));
       goto exit;
     }
   } else {
@@ -1610,7 +1638,7 @@ do_make_directory (GVfsBackend *backend,
   if (!entry) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("Directory doesn't exist"));
+                              _("Directory doesn’t exist"));
     goto exit;
   }
 
@@ -1656,7 +1684,7 @@ do_pull (GVfsBackend *backend,
   if (entry == NULL) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("File doesn't exist"));
+                              _("File doesn’t exist"));
     goto exit;
   } else if (entry->id == -1) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
@@ -1672,7 +1700,7 @@ do_pull (GVfsBackend *backend,
   if (file == NULL) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("File doesn't exist"));
+                              _("File doesn’t exist"));
     goto exit;
   }
 
@@ -1712,12 +1740,12 @@ do_pull (GVfsBackend *backend,
       } else if (source_is_dir && dest_is_dir) {
         g_vfs_job_failed_literal (G_VFS_JOB (job),
                                   G_IO_ERROR, G_IO_ERROR_WOULD_MERGE,
-                                  _("Can't merge directories"));
+                                  _("Can’t merge directories"));
         goto exit;
       } else if (source_is_dir && !dest_is_dir) {
         g_vfs_job_failed_literal (G_VFS_JOB (job),
                                   G_IO_ERROR, G_IO_ERROR_WOULD_RECURSE,
-                                  _("Can't recursively copy directory"));
+                                  _("Can’t recursively copy directory"));
         goto exit;
       }
       /* Source and Dest are files */
@@ -1740,7 +1768,7 @@ do_pull (GVfsBackend *backend,
   } else if (source_is_dir) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_WOULD_RECURSE,
-                              _("Can't recursively copy directory"));
+                              _("Can’t recursively copy directory"));
     goto exit;
   }
 
@@ -1993,7 +2021,7 @@ do_push (GVfsBackend *backend,
   if (!parent) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("Directory doesn't exist"));
+                              _("Directory doesn’t exist"));
     goto exit;
   }
 
@@ -2011,18 +2039,6 @@ do_push (GVfsBackend *backend,
     goto exit;
   }
 
-  /*
-   * Don't do this for >=4GB files with android extensions. Some devices
-   * have trouble transferring large files this way. eg: Nexus 5.
-   */
-  if (g_file_info_get_size (info) > G_MAXUINT32 &&
-      G_VFS_BACKEND_MTP (backend)->android_extension) {
-    g_vfs_job_failed_literal (G_VFS_JOB (job),
-                              G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
-                              _("Operation unsupported"));
-    goto exit;
-  }
-
   gboolean source_is_dir =
     g_file_info_get_file_type (info) == G_FILE_TYPE_DIRECTORY;
 
@@ -2037,12 +2053,12 @@ do_push (GVfsBackend *backend,
       } else if (source_is_dir && dest_is_dir) {
         g_vfs_job_failed_literal (G_VFS_JOB (job),
                                   G_IO_ERROR, G_IO_ERROR_WOULD_MERGE,
-                                  _("Can't merge directories"));
+                                  _("Can’t merge directories"));
         goto exit;
       } else if (source_is_dir && !dest_is_dir) {
         g_vfs_job_failed_literal (G_VFS_JOB (job),
                                   G_IO_ERROR, G_IO_ERROR_WOULD_RECURSE,
-                                  _("Can't recursively copy directory"));
+                                  _("Can’t recursively copy directory"));
         goto exit;
       }
       /* Source and Dest are files */
@@ -2066,7 +2082,7 @@ do_push (GVfsBackend *backend,
   } else if (source_is_dir) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_WOULD_RECURSE,
-                              _("Can't recursively copy directory"));
+                              _("Can’t recursively copy directory"));
     goto exit;
   }
 
@@ -2126,7 +2142,7 @@ do_delete (GVfsBackend *backend,
   if (entry == NULL) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("File doesn't exist"));
+                              _("File doesn’t exist"));
     goto exit;
   } else if (entry->id == -1) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
@@ -2189,7 +2205,7 @@ do_set_display_name (GVfsBackend *backend,
   if (entry == NULL) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("File doesn't exist"));
+                              _("File doesn’t exist"));
     goto exit;
   } else if (entry->id == -1) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
@@ -2257,7 +2273,7 @@ do_open_for_read (GVfsBackend *backend,
   if (entry == NULL) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("File doesn't exist"));
+                              _("File doesn’t exist"));
     goto exit;
   } else if (entry->id == -1) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
@@ -2279,7 +2295,7 @@ do_open_for_read (GVfsBackend *backend,
     LIBMTP_destroy_file_t (file);
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_IS_DIRECTORY,
-                             _("Can't open directory"));
+                             _("Can’t open directory"));
     goto exit;
   }
 
@@ -2351,7 +2367,7 @@ do_open_icon_for_read (GVfsBackend *backend,
       g_vfs_job_failed (G_VFS_JOB (job),
                         G_IO_ERROR,
                         G_IO_ERROR_NOT_FOUND,
-                        _("No thumbnail for entity '%s'"),
+                        _("No thumbnail for entity “%s”"),
                         icon_id);
       goto exit;
     }
@@ -2369,7 +2385,7 @@ do_open_icon_for_read (GVfsBackend *backend,
     g_vfs_job_failed (G_VFS_JOB (job),
                       G_IO_ERROR,
                       G_IO_ERROR_INVALID_ARGUMENT,
-                      _("Malformed icon identifier '%s'"),
+                      _("Malformed icon identifier “%s”"),
                       icon_id);
     goto exit;
   }
@@ -2445,6 +2461,21 @@ do_read (GVfsBackend *backend,
       goto exit;
     }
 
+    /*
+     * Almost all android devices have a bug where they do not enforce
+     * POSIX semantics for read past EOF, leading to undefined
+     * behaviour including device-side hangs. We'd better handle it
+     * here.
+     */
+    if (offset >= handle->size) {
+      g_debug ("(II) skipping read with offset past EOF\n");
+      actual = 0;
+      goto finished;
+    } else if (offset + bytes_requested > handle->size) {
+      g_debug ("(II) reducing bytes_requested to avoid reading past EOF\n");
+      bytes_requested = handle->size - offset;
+    }
+
     unsigned char *temp;
     int ret = LIBMTP_GetPartialObject (G_VFS_BACKEND_MTP (backend)->device, id, offset,
                                        bytes_requested, &temp, &actual);
@@ -2465,6 +2496,7 @@ do_read (GVfsBackend *backend,
     memcpy (buffer, bytes->data + offset, actual);
   }
 
+ finished:
   handle->offset = offset + actual;
   g_vfs_job_read_set_size (job, actual);
   g_vfs_job_succeeded (G_VFS_JOB (job));
@@ -2536,7 +2568,7 @@ do_create (GVfsBackend *backend,
   if (!entry) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("Directory doesn't exist"));
+                              _("Directory doesn’t exist"));
     goto exit;
   }
 
@@ -2611,7 +2643,7 @@ do_append_to (GVfsBackend *backend,
   if (entry == NULL) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),
                               G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                              _("File doesn't exist"));
+                              _("File doesn’t exist"));
     goto exit;
   } else if (entry->id == -1) {
     g_vfs_job_failed_literal (G_VFS_JOB (job),

@@ -90,7 +90,6 @@ struct _GVfsBackendSmbBrowse
   GMutex update_cache_lock;
   time_t last_entry_update;
   GList *entries;
-  int entry_errno;
 };
 
 
@@ -239,7 +238,7 @@ g_vfs_backend_smb_browse_init (GVfsBackendSmbBrowse *backend)
   g_mutex_init (&backend->update_cache_lock);
 
   if (mount_tracker == NULL)
-    mount_tracker = g_mount_tracker_new (NULL);
+    mount_tracker = g_mount_tracker_new (NULL, FALSE);
 
   /* Get default workgroup name */
   settings = g_settings_new ("org.gnome.system.smb");
@@ -541,52 +540,6 @@ purge_cached (SMBCCTX * context)
   return 0;
 }
 
-#define SUB_DELIM_CHARS  "!$&'()*+,;="
-
-static gboolean
-is_valid (char c, const char *reserved_chars_allowed)
-{
-  if (g_ascii_isalnum (c) ||
-      c == '-' ||
-      c == '.' ||
-      c == '_' ||
-      c == '~')
-    return TRUE;
-
-  if (reserved_chars_allowed &&
-      strchr (reserved_chars_allowed, c) != NULL)
-    return TRUE;
-  
-  return FALSE;
-}
-
-static void
-g_string_append_encoded (GString *string,
-			 const char *encoded,
-			 const char *encoded_end,
-			 const char *reserved_chars_allowed)
-{
-  char c;
-  static const gchar hex[16] = "0123456789ABCDEF";
-
-  if (encoded_end == NULL)
-    encoded_end = encoded + strlen (encoded);
-  
-  while (encoded < encoded_end)
-    {
-      c = *encoded++;
-      
-      if (is_valid (c, reserved_chars_allowed))
-	g_string_append_c (string, c);
-      else
-	{
-	  g_string_append_c (string, '%');
-	  g_string_append_c (string, hex[((guchar)c) >> 4]);
-	  g_string_append_c (string, hex[((guchar)c) & 0xf]);
-	}
-    }
-}
-
 static gboolean
 update_cache (GVfsBackendSmbBrowse *backend, SMBCFILE *supplied_dir)
 {
@@ -594,7 +547,6 @@ update_cache (GVfsBackendSmbBrowse *backend, SMBCFILE *supplied_dir)
   char dirents[1024*4];
   struct smbc_dirent *dirp;
   GList *entries;
-  int entry_errno;
   SMBCFILE *dir;
   int res;
   smbc_opendir_fn smbc_opendir;
@@ -603,7 +555,6 @@ update_cache (GVfsBackendSmbBrowse *backend, SMBCFILE *supplied_dir)
 
 
   entries = NULL;
-  entry_errno = 0;
   res = -1;
 
   g_mutex_lock (&backend->update_cache_lock);
@@ -621,7 +572,6 @@ update_cache (GVfsBackendSmbBrowse *backend, SMBCFILE *supplied_dir)
   g_free (uri);
   if (dir == NULL)
     {
-      entry_errno = errno;
       goto out;
     }
 
@@ -678,7 +628,6 @@ update_cache (GVfsBackendSmbBrowse *backend, SMBCFILE *supplied_dir)
   /* Clear old cache */
   g_list_free_full (backend->entries, (GDestroyNotify)browse_entry_free);
   backend->entries = entries;
-  backend->entry_errno = entry_errno;
   backend->last_entry_update = time (NULL);
 
   g_debug ("update_cache - done.\n");
@@ -838,6 +787,7 @@ do_mount (GVfsBackend *backend,
   GMountSpec *browse_mount_spec;
   smbc_opendir_fn smbc_opendir;
   smbc_closedir_fn smbc_closedir;
+  int errsv;
   
   smb_context = smbc_new_context ();
   if (smb_context == NULL)
@@ -949,6 +899,8 @@ do_mount (GVfsBackend *backend,
 
   g_debug ("do_mount - URI = %s\n", uri);
 
+  errsv = 0;
+
   do
     {
       op_backend->mount_try_again = FALSE;
@@ -958,12 +910,13 @@ do_mount (GVfsBackend *backend,
 
       dir = smbc_opendir (smb_context, uri);
 
+      errsv = errno;
       g_debug ("do_mount - [%s; %d] dir = %p, cancelled = %d, errno = [%d] '%s' \n",
              uri, op_backend->mount_try, dir, op_backend->mount_cancelled,
-             errno, g_strerror (errno));
+             errsv, g_strerror (errsv));
 
       if (dir == NULL && 
-          (op_backend->mount_cancelled || (errno != EPERM && errno != EACCES)))
+          (op_backend->mount_cancelled || (errsv != EPERM && errsv != EACCES)))
         {
           g_debug ("do_mount - (errno != EPERM && errno != EACCES), cancelled = %d, breaking\n", op_backend->mount_cancelled);
 	  break;
@@ -1011,7 +964,7 @@ do_mount (GVfsBackend *backend,
         g_vfs_job_failed (G_VFS_JOB (job),
 			  G_IO_ERROR, G_IO_ERROR_FAILED,
 			  /* translators: We tried to mount a windows (samba) share, but failed */
-			  _("Failed to retrieve share list from server: %s"), g_strerror (errno));
+			  _("Failed to retrieve share list from server: %s"), g_strerror (errsv));
 
       return;
     }
@@ -1111,7 +1064,7 @@ run_mount_mountable (GVfsBackendSmbBrowse *backend,
   else
     g_set_error_literal (&error,
 			 G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-			 _("File doesn't exist"));
+			 _("File doesn’t exist"));
       
   g_mutex_unlock (&backend->entries_lock);
 
@@ -1178,7 +1131,7 @@ run_open_for_read (GVfsBackendSmbBrowse *backend,
   else
     g_vfs_job_failed (G_VFS_JOB (job),
 		      G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-		      _("File doesn't exist"));
+		      _("File doesn’t exist"));
 }
 
 static void
@@ -1297,7 +1250,7 @@ get_file_info_from_entry (GVfsBackendSmbBrowse *backend, BrowseEntry *entry, GFi
 	  entry->smbc_type == SMBC_SERVER)
 	{
 	  uri = g_string_new ("smb://");
-	  g_string_append_encoded (uri, entry->name, NULL, NULL);
+          g_string_append_uri_escaped (uri, entry->name, NULL, FALSE);
 	  g_string_append_c (uri, '/');
 	}
       else
@@ -1305,16 +1258,16 @@ get_file_info_from_entry (GVfsBackendSmbBrowse *backend, BrowseEntry *entry, GFi
 	  mount_spec = get_mount_spec_for_share (backend->server, backend->port, entry->name);
 
 	  uri = g_string_new ("smb://");
-	  g_string_append_encoded (uri, backend->server, NULL, NULL);
+          g_string_append_uri_escaped (uri, backend->server, NULL, FALSE);
 	  g_string_append_c (uri, '/');
-	  g_string_append_encoded (uri, entry->name, NULL, NULL);
+          g_string_append_uri_escaped (uri, entry->name, NULL, FALSE);
 	}
     }
   else
     {
       /* browsing network */
       uri = g_string_new ("smb://");
-      g_string_append_encoded (uri, entry->name, NULL, NULL);
+      g_string_append_uri_escaped (uri, entry->name, NULL, FALSE);
       g_string_append_c (uri, '/');
 
       /* these are auto-mounted, so no CAN_MOUNT/UNMOUNT */
@@ -1365,7 +1318,7 @@ run_query_info (GVfsBackendSmbBrowse *backend,
   else
     g_vfs_job_failed (G_VFS_JOB (job),
 		      G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-		      _("File doesn't exist"));
+		      _("File doesn’t exist"));
 }
 
 static void
@@ -1438,7 +1391,7 @@ run_enumerate (GVfsBackendSmbBrowse *backend,
       else
 	g_vfs_job_failed (G_VFS_JOB (job),
 			  G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-			  _("File doesn't exist"));
+			  _("File doesn’t exist"));
       return;
     }
   

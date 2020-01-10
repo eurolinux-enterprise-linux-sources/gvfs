@@ -59,6 +59,7 @@
 #include "gvfsjobpush.h"
 #include "gvfsdaemonprotocol.h"
 #include "gvfsdaemonutils.h"
+#include "gvfsutils.h"
 
 #ifdef HAVE_AVAHI
 #include "gvfsdnssdutils.h"
@@ -1155,6 +1156,7 @@ ms_response_to_fs_info (MsResponse *response,
   gboolean    have_bytes_avail;
   gboolean    have_bytes_used;
 
+  bytes_avail = bytes_used = 0;
   have_bytes_avail = have_bytes_used = FALSE;
 
   ms_response_get_propstat_iter (response, &iter);
@@ -1201,7 +1203,7 @@ ms_response_to_fs_info (MsResponse *response,
       g_file_info_set_attribute_uint64 (info,
                                         G_FILE_ATTRIBUTE_FILESYSTEM_FREE,
                                         bytes_avail);
-      if (have_bytes_used)
+      if (have_bytes_used && G_MAXUINT64 - bytes_avail >= bytes_used)
         g_file_info_set_attribute_uint64 (info,
                                          G_FILE_ATTRIBUTE_FILESYSTEM_SIZE,
                                          bytes_avail + bytes_used);
@@ -1654,7 +1656,7 @@ g_mount_spec_to_dav_uri (GMountSpec *spec)
   soup_uri_set_user (uri, user);
 
   /* IPv6 host does not include brackets in SoupURI, but GMountSpec host does */
-  if (host[0] == '[')
+  if (gvfs_is_ipv6 (host))
     uri->host = g_strndup (host + 1, strlen (host) - 2);
   else
     soup_uri_set_host (uri, host);
@@ -1891,6 +1893,7 @@ do_mount (GVfsBackend  *backend,
     res = TRUE;
     status = g_vfs_backend_dav_send_message (backend, msg_opts);
     is_success = SOUP_STATUS_IS_SUCCESSFUL (status);
+    is_webdav = sm_has_header (msg_opts, "DAV");
 
     /* If SSL is used and the certificate verifies OK, then ssl-strict remains
      * on for all further connections.
@@ -1918,8 +1921,6 @@ do_mount (GVfsBackend  *backend,
             break;
           }
       }
-
-    is_webdav = sm_has_header (msg_opts, "DAV");
 
     if (!is_success || !is_webdav)
       break;
@@ -2864,12 +2865,12 @@ do_move (GVfsBackend *backend,
                     g_vfs_job_failed_literal (G_VFS_JOB(job),
                                               G_IO_ERROR,
                                               G_IO_ERROR_WOULD_MERGE,
-                                              _("Can't move directory over directory"));
+                                              _("Can’t move directory over directory"));
                   else
                     g_vfs_job_failed_literal (G_VFS_JOB(job),
                                               G_IO_ERROR,
                                               G_IO_ERROR_IS_DIRECTORY,
-                                              _("Can't move over directory"));
+                                              _("Can’t move over directory"));
                   goto error;
                 }
               else if (source_ft == G_FILE_TYPE_DIRECTORY)
@@ -2987,7 +2988,7 @@ do_copy (GVfsBackend *backend,
                 g_vfs_job_failed_literal (G_VFS_JOB(job),
                                           G_IO_ERROR,
                                           G_IO_ERROR_WOULD_MERGE,
-                                          _("Can't copy directory over directory"));
+                                          _("Can’t copy directory over directory"));
               else
                 g_vfs_job_failed_literal (G_VFS_JOB(job),
                                           G_IO_ERROR,
@@ -3016,7 +3017,7 @@ do_copy (GVfsBackend *backend,
       g_vfs_job_failed_literal (G_VFS_JOB (job),
                                 G_IO_ERROR,
                                 G_IO_ERROR_WOULD_RECURSE,
-                                _("Can't recursively copy directory"));
+                                _("Can’t recursively copy directory"));
       goto error;
     }
 

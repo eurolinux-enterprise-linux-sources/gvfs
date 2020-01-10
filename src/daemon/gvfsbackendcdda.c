@@ -37,15 +37,7 @@
 #include <glib/gstdio.h>
 #include <glib/gi18n.h>
 #include <gio/gio.h>
-#ifdef HAVE_GUDEV
-  #include <gudev/gudev.h>
-#elif defined(HAVE_HAL)
-  #include <libhal.h>
-  #include <dbus/dbus.h>
-#else
-  #error Needs hal or gudev
-#endif
-
+#include <gudev/gudev.h>
 
 #include "gvfsbackendcdda.h"
 #include "gvfsjobopenforread.h"
@@ -99,13 +91,7 @@ struct _GVfsBackendCdda
 {
   GVfsBackend parent_instance;
 
-#ifdef HAVE_GUDEV
   GUdevClient *gudev_client;
-#elif defined(HAVE_HAL)
-  DBusConnection *dbus_connection;
-  LibHalContext *hal_ctx;
-  char *hal_udi;
-#endif
 
   guint64 size;
 
@@ -225,7 +211,6 @@ fetch_metadata (GVfsBackendCdda *cdda_backend)
   cdio_destroy (cdio);
 }
 
-#ifdef HAVE_GUDEV
 static void
 on_uevent (GUdevClient *client, gchar *action, GUdevDevice *device, gpointer user_data)
 {
@@ -240,62 +225,10 @@ on_uevent (GUdevClient *client, gchar *action, GUdevDevice *device, gpointer use
       g_udev_device_get_property_as_int (device, "ID_CDROM_MEDIA") != 1))
     {
       g_vfs_backend_force_unmount (G_VFS_BACKEND (cdda_backend));
+
+      g_signal_handlers_disconnect_by_func (cdda_backend->gudev_client, on_uevent, cdda_backend);
     }
 }
-
-#elif defined(HAVE_HAL)
-static void
-find_udi_for_device (GVfsBackendCdda *cdda_backend)
-{
-  int num_devices;
-  char **devices;
-  int n;
-
-  cdda_backend->hal_udi = NULL;
-
-  devices = libhal_manager_find_device_string_match (cdda_backend->hal_ctx,
-                                                     "block.device",
-                                                     cdda_backend->device_path,
-                                                     &num_devices,
-                                                     NULL);
-  if (devices != NULL)
-    {
-      for (n = 0; n < num_devices && cdda_backend->hal_udi == NULL; n++)
-        {
-          char *udi = devices[n];
-          LibHalPropertySet *ps;
-
-          ps = libhal_device_get_all_properties (cdda_backend->hal_ctx, udi, NULL);
-          if (ps != NULL)
-            {
-              if (libhal_ps_get_bool (ps, "block.is_volume"))
-                {
-                  cdda_backend->hal_udi = g_strdup (udi);
-                  cdda_backend->size = libhal_ps_get_uint64 (ps, "volume.size");
-                }                
-            }
-                  
-          libhal_free_property_set (ps);
-        }
-    }
-  libhal_free_string_array (devices);
-
-  /*g_warning ("found udi '%s'", cdda_backend->hal_udi);*/
-}
-
-static void
-_hal_device_removed (LibHalContext *hal_ctx, const char *udi)
-{
-  GVfsBackendCdda *cdda_backend;
-
-  cdda_backend = G_VFS_BACKEND_CDDA (libhal_ctx_get_user_data (hal_ctx));
-
-  if (cdda_backend->hal_udi != NULL && strcmp (udi, cdda_backend->hal_udi) == 0)
-    {
-      g_vfs_backend_force_unmount (G_VFS_BACKEND (cdda_backend));
-    }
-}
-#endif
 
 static void
 g_vfs_backend_cdda_finalize (GObject *object)
@@ -345,7 +278,6 @@ do_mount (GVfsBackend *backend,
 
   //g_warning ("do_mount %p", cdda_backend);
 
-#ifdef HAVE_GUDEV
   /* setup gudev */
   const char *subsystems[] = {"block", NULL};
   GUdevDevice *gudev_device;
@@ -363,53 +295,6 @@ do_mount (GVfsBackend *backend,
 
   g_signal_connect (cdda_backend->gudev_client, "uevent", G_CALLBACK (on_uevent), cdda_backend);
 
-#elif defined(HAVE_HAL)
-  DBusError dbus_error;
-
-  /* setup libhal */
-
-  dbus_error_init (&dbus_error);
-  cdda_backend->dbus_connection = dbus_bus_get_private (DBUS_BUS_SYSTEM, &dbus_error);
-  if (dbus_error_is_set (&dbus_error))
-    {
-      release_device (cdda_backend);
-      release_metadata (cdda_backend);
-      dbus_error_free (&dbus_error);
-      g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_FAILED, _("Cannot connect to the system bus"));
-      g_vfs_job_failed_from_error (G_VFS_JOB (job), error);
-      g_error_free (error);
-      return;
-    }
-  
-  cdda_backend->hal_ctx = libhal_ctx_new ();
-  if (cdda_backend->hal_ctx == NULL)
-    {
-      release_device (cdda_backend);
-      release_metadata (cdda_backend);
-      g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_FAILED, _("Cannot create libhal context"));
-      g_vfs_job_failed_from_error (G_VFS_JOB (job), error);
-      g_error_free (error);
-      return;
-    }
-
-  _g_dbus_connection_integrate_with_main (cdda_backend->dbus_connection);
-  libhal_ctx_set_dbus_connection (cdda_backend->hal_ctx, cdda_backend->dbus_connection);
-  
-  if (!libhal_ctx_init (cdda_backend->hal_ctx, &dbus_error))
-    {
-      release_device (cdda_backend);
-      release_metadata (cdda_backend);
-      dbus_error_free (&dbus_error);
-      g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_FAILED, _("Cannot initialize libhal"));
-      g_vfs_job_failed_from_error (G_VFS_JOB (job), error);
-      g_error_free (error);
-      return;
-    }
-
-  libhal_ctx_set_device_removed (cdda_backend->hal_ctx, _hal_device_removed);
-  libhal_ctx_set_user_data (cdda_backend->hal_ctx, cdda_backend);
-#endif
-
   /* setup libcdio */
 
   host = g_mount_spec_get (mount_spec, "host");
@@ -426,15 +311,10 @@ do_mount (GVfsBackend *backend,
 
   cdda_backend->device_path = g_strdup_printf ("/dev/%s", host);
 
-#ifdef HAVE_GUDEV
   gudev_device = g_udev_client_query_by_device_file (cdda_backend->gudev_client, cdda_backend->device_path);
   if (gudev_device != NULL)
     cdda_backend->size = g_udev_device_get_sysfs_attr_as_uint64 (gudev_device, "size") * 512;
   g_object_unref (gudev_device);
-
-#elif defined(HAVE_HAL)
-  find_udi_for_device (cdda_backend);
-#endif
 
   cdda_backend->drive = cdio_cddap_identify (cdda_backend->device_path, 0, NULL);
   if (cdda_backend->drive == NULL)
@@ -538,7 +418,9 @@ do_unmount (GVfsBackend *backend,
 
   release_device (cdda_backend);
   release_metadata (cdda_backend);
-  
+
+  g_signal_handlers_disconnect_by_func (cdda_backend->gudev_client, on_uevent, cdda_backend);
+
   g_vfs_job_succeeded (G_VFS_JOB (job));
 
   //g_warning ("unmounted %p", backend);
@@ -829,7 +711,7 @@ do_read (GVfsBackend *backend,
           g_vfs_job_failed (G_VFS_JOB (job), G_IO_ERROR,
                             g_io_error_from_errno (errsv),
                             /* Translators: paranoia is the name of the cd audio reading library */
-                            _("Error from 'paranoia' on drive %s"), cdda_backend->device_path);
+                            _("Error from “paranoia” on drive %s"), cdda_backend->device_path);
           return;
         }
 
@@ -1021,14 +903,14 @@ do_query_info (GVfsBackend *backend,
 
       if (track_num > cdda_backend->drive->tracks)
         {
-          error = g_error_new (G_IO_ERROR, G_IO_ERROR_NOT_FOUND, _("File doesn't exist"));
+          error = g_error_new (G_IO_ERROR, G_IO_ERROR_NOT_FOUND, _("File doesn’t exist"));
           g_vfs_job_failed_from_error (G_VFS_JOB (job), error);
           return;
         }
 
       if (! cdio_cddap_track_audiop (cdda_backend->drive, track_num))
         {
-          error = g_error_new (G_IO_ERROR, G_IO_ERROR_NOT_FOUND, _("The file does not exist or isn't an audio track"));
+          error = g_error_new (G_IO_ERROR, G_IO_ERROR_NOT_FOUND, _("The file does not exist or isn’t an audio track"));
           g_vfs_job_failed_from_error (G_VFS_JOB (job), error);
           return;
         }

@@ -104,8 +104,12 @@ log_debug (const gchar   *log_domain,
            const gchar   *message,
            gpointer       unused_data)
 {
+  struct fuse_context *context;
+
+  context = fuse_get_context ();
+
   if (gvfs_get_debug ())
-    g_print ("%s", message);
+    g_print ("fuse(%u): %s", context ? context->pid : 0, message);
 }
 
 typedef struct {
@@ -641,7 +645,10 @@ vfs_statfs (const gchar *path, struct statvfs *stbuf)
       if (file_info)
         {
           if (g_file_info_has_attribute (file_info, G_FILE_ATTRIBUTE_FILESYSTEM_SIZE))
-            stbuf->f_blocks = (g_file_info_get_attribute_uint64 (file_info, G_FILE_ATTRIBUTE_FILESYSTEM_SIZE) + 4096 - 1) / 4096;
+            {
+              guint64 size = g_file_info_get_attribute_uint64 (file_info, G_FILE_ATTRIBUTE_FILESYSTEM_SIZE);
+              stbuf->f_blocks = (size > 0) ? ((size - 1) / 4096 + 1) : 0;
+            }
           if (g_file_info_has_attribute (file_info, G_FILE_ATTRIBUTE_FILESYSTEM_FREE))
             stbuf->f_bfree = stbuf->f_bavail = g_file_info_get_attribute_uint64 (file_info, G_FILE_ATTRIBUTE_FILESYSTEM_FREE) / 4096;
 
@@ -1054,7 +1061,12 @@ open_common (const gchar *path, struct fuse_file_info *fi, GFile *file, int outp
 
   SET_FILE_HANDLE (fi, fh);
 
-  g_debug ("open_common: flags=%o\n", fi->flags);
+  g_debug ("open_common: flags=%o (%s%s%s%s)\n",
+           fi->flags,
+           fi->flags & O_WRONLY ? "O_WRONLY " : "O_RDONLY ",
+           fi->flags & O_RDWR   ? "O_RDWR "   : "",
+           fi->flags & O_APPEND ? "O_APPEND " : "",
+           fi->flags & O_TRUNC  ? "O_TRUNC "  : "");
 
   /* Set up a stream here, so we can check for errors */
   set_pid_for_file (file);
@@ -1476,7 +1488,12 @@ vfs_write (const gchar *path, const gchar *buf, size_t len, off_t offset,
   gint   result = 0;
 
   g_debug ("vfs_write: %s\n", path);
-  g_debug ("vfs_write: flags=%o\n", fi->flags);
+  g_debug ("vfs_write: flags=%o (%s%s%s%s)\n",
+           fi->flags,
+           fi->flags & O_WRONLY ? "O_WRONLY " : "O_RDONLY ",
+           fi->flags & O_RDWR   ? "O_RDWR "   : "",
+           fi->flags & O_APPEND ? "O_APPEND " : "",
+           fi->flags & O_TRUNC  ? "O_TRUNC "  : "");
 
   if ((file = file_from_full_path (path)))
     {

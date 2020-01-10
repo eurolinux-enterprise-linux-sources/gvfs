@@ -22,6 +22,7 @@
 
 #include <config.h>
 #include "gvfsuriutils.h"
+#include "gvfsutils.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -162,14 +163,29 @@ g_vfs_decode_uri (const char *uri)
 				    authority_end - authority_start, "@");
       if (userinfo_end)
 	{
-	  userinfo_start = authority_start;
+          char *p;
+
+          host_start = userinfo_end + 1;
+          userinfo_start = authority_start;
+
+          /* Applications should not render as clear text any data
+           * after the first colon (":") character found within a userinfo
+           * subcomponent unless the data after the colon is the empty string
+           * (indicating no password). Applications may choose to ignore or
+           * reject such data when it is received as part of a reference and
+           * should reject the storage of such data in unencrypted form.
+           * See https://tools.ietf.org/html/rfc3986
+           */
+          p = memchr (userinfo_start, ':', userinfo_end - userinfo_start);
+          if (p != NULL)
+            userinfo_end = p;
+
 	  decoded->userinfo = g_uri_unescape_segment (userinfo_start, userinfo_end, NULL);
 	  if (decoded->userinfo == NULL)
 	    {
 	      g_vfs_decoded_uri_free (decoded);
 	      return NULL;
 	    }
-	  host_start = userinfo_end + 1;
 	}
       else
 	host_start = authority_start;
@@ -264,12 +280,19 @@ g_vfs_encode_uri (GDecodedUri *decoded, gboolean allow_utf8)
 				       G_URI_RESERVED_CHARS_ALLOWED_IN_USERINFO, allow_utf8);
 	  g_string_append_c (uri, '@');
 	}
-      
-      g_string_append_uri_escaped (uri, decoded->host,
-				   /* Allowed unescaped in hostname / ip address */
-				   G_URI_RESERVED_CHARS_SUBCOMPONENT_DELIMITERS ":[]" ,
-				   allow_utf8);
-      
+
+      if (gvfs_is_ipv6 (decoded->host))
+        {
+          g_string_append (uri, decoded->host);
+        }
+      else
+        {
+          g_string_append_uri_escaped (uri, decoded->host,
+                                       /* Allowed unescaped in hostname / ip address */
+                                       G_URI_RESERVED_CHARS_SUBCOMPONENT_DELIMITERS,
+                                       allow_utf8);
+        }
+
       if (decoded->port != -1)
 	{
 	  g_string_append_c (uri, ':');

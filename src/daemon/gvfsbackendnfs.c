@@ -177,9 +177,9 @@ do_mount (GVfsBackend *backend,
   GSource *source;
   NfsSource *nfs_source;
   struct exportnode *export_list, *ptr;
-  const char *host;
+  const char *host, *debug;
   char *basename, *display_name, *export = NULL;
-  int err;
+  int err, debug_val;
   size_t pathlen = strlen (mount_spec->mount_prefix);
   size_t exportlen = SIZE_MAX;
   static GSourceFuncs nfs_source_callbacks = {
@@ -247,6 +247,15 @@ do_mount (GVfsBackend *backend,
   mount_free_export_list (export_list);
 
   op_backend->ctx = nfs_init_context ();
+
+  debug = g_getenv ("GVFS_NFS_DEBUG");
+  if (debug)
+    debug_val = atoi (debug);
+  else
+    debug_val = 0;
+
+  nfs_set_debug (op_backend->ctx, debug_val);
+
   err = nfs_mount (op_backend->ctx, host, export);
   if (err)
     {
@@ -344,7 +353,7 @@ open_for_read_fstat_cb (int err,
           g_vfs_job_failed_literal (job,
                                     G_IO_ERROR,
                                     G_IO_ERROR_IS_DIRECTORY,
-                                    _("Can't open directory"));
+                                    _("Can’t open directory"));
           return;
         }
     }
@@ -1459,7 +1468,7 @@ try_close_write (GVfsBackend *backend,
   GVfsBackendNfs *op_backend = G_VFS_BACKEND_NFS (backend);
   WriteHandle *handle = _handle;
 
-  handle->job = g_object_ref (job);
+  handle->job = G_VFS_JOB (g_object_ref (job));
   nfs_fstat64_async (op_backend->ctx, handle->fh, close_stat_cb, handle);
 
   return TRUE;
@@ -2469,7 +2478,7 @@ move_stat_dest_cb (int err,
                 {
                   g_vfs_job_failed_literal (job,
                                             G_IO_ERROR, G_IO_ERROR_WOULD_MERGE,
-                                            _("Can't move directory over directory"));
+                                            _("Can’t move directory over directory"));
                 }
               else
                 {

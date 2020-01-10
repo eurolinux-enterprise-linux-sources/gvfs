@@ -137,19 +137,26 @@ static void
 gudev_add_device (GMtpVolumeMonitor *monitor, GUdevDevice *device, gboolean do_emit)
 {
   GMtpVolume *volume;
-  const char *usb_bus_num, *usb_device_num;
+  const char *usb_bus_num, *usb_device_num, *device_path;
   char *uri;
   GFile *activation_mount_root;
 
+  device_path = g_udev_device_get_device_file (device);
+  if (!device_path) {
+    g_debug ("Ignoring device '%s' without a device file",
+             g_udev_device_get_sysfs_path (device));
+    return;
+  }
+
   usb_bus_num = g_udev_device_get_property (device, "BUSNUM");
   if (usb_bus_num == NULL) {
-    g_warning ("device %s has no BUSNUM property, ignoring", g_udev_device_get_device_file (device));
+    g_warning ("device %s has no BUSNUM property, ignoring", device_path);
     return;
   }
 
   usb_device_num = g_udev_device_get_property (device, "DEVNUM");
   if (usb_device_num == NULL) {
-    g_warning ("device %s has no DEVNUM property, ignoring", g_udev_device_get_device_file (device));
+    g_warning ("device %s has no DEVNUM property, ignoring", device_path);
     return;
   }
 
@@ -208,17 +215,12 @@ on_uevent (GUdevClient *client, gchar *action, GUdevDevice *device, gpointer use
 
   g_debug ("on_uevent: action=%s, device=%s", action, g_udev_device_get_device_file(device));
 
-  /* filter out uninteresting events */
-  if (!g_udev_device_has_property (device, "ID_MTP_DEVICE"))
-    {
-      g_debug ("on_uevent: discarding, not ID_MTP");
-      return;
-    }
-
-  if (strcmp (action, "add") == 0)
-     gudev_add_device (monitor, device, TRUE); 
-  else if (strcmp (action, "remove") == 0)
-     gudev_remove_device (monitor, device); 
+  if (g_strcmp0 (action, "add") == 0 && g_udev_device_has_property (device, "ID_MTP_DEVICE"))
+    gudev_add_device (monitor, device, TRUE);
+  else if (g_strcmp0 (action, "remove") == 0)
+    gudev_remove_device (monitor, device);
+  else
+    g_debug ("on_uevent: discarding");
 }
 
 static void
@@ -247,7 +249,7 @@ g_mtp_volume_monitor_constructor (GType                  type,
 
   G_LOCK (vm_lock);
   if (the_volume_monitor != NULL) {
-    object = g_object_ref (the_volume_monitor);
+    object = G_OBJECT (g_object_ref (the_volume_monitor));
     G_UNLOCK (vm_lock);
     return object;
   }
